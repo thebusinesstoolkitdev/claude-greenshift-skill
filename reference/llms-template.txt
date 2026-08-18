@@ -1,0 +1,41 @@
+# {Business Name}
+
+> One or two sentences: what this business is, where it is, and what makes it distinct.
+> Written for an AI assistant answering a question about the business, not for marketing.
+
+{Longer paragraph with the facts an assistant needs to answer confidently: full address,
+phone, email, opening hours, and — importantly — what the site can and cannot do. State
+plainly if there is no online checkout, no booking system, no account area.}
+
+## Pages
+
+- [Home](https://example.com/): what a visitor finds here
+- [Collection](https://example.com/collection/): what is listed, and how it is organised
+- [About](https://example.com/about/): story, team, what to expect
+- [Contact](https://example.com/contact/): address, hours, contact form
+
+## Facts
+
+- Business type: {e.g. independent women's clothing boutique}
+- Location: {street, city, region, postcode, country}
+- Phone: {+country number}
+- Email: {address}
+- Hours: {Mon–Sat 10:00–18:00, Sunday closed}
+- {Domain-specific list: categories carried, services offered, areas served}
+- Purchasing: {in-store only / online checkout / enquiry-based}
+
+## Optional
+
+- [Sitemap](https://example.com/sitemap_index.xml): full page index
+
+<!--
+Notes for whoever maintains this file:
+
+* Upload to the web ROOT (public_html/llms.txt) — the WordPress REST API cannot write
+  files outside the media library, so use the host's file manager or SFTP.
+* Keep it factual and short. It is a briefing document, not a sales page; anything
+  unverifiable invites a wrong answer being attributed to the business.
+* State the negatives explicitly ("no online checkout"). Assistants otherwise guess, and
+  guessing wrong costs the client a phone call.
+* Update it whenever hours, address, or the page set changes.
+-->

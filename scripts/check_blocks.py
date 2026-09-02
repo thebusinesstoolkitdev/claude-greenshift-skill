@@ -39,7 +39,9 @@ def audit(path, target='template'):
     src = io.open(path, encoding='utf-8').read()
     problems = []
 
-    opens = len(re.findall(r'<!-- wp:', src))
+    # self-closing blocks (<!-- wp:site-logo /-->) open nothing
+    opens = len(re.findall(r'<!-- wp:', src)) - len(re.findall(r'<!-- wp:[^
+]*?/-->', src))
     closes = len(re.findall(r'<!-- /wp:', src))
     if opens != closes:
         problems.append('block comments unbalanced: %d open, %d close' % (opens, closes))

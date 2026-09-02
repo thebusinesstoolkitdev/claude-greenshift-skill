@@ -20,6 +20,7 @@ import base64
 import io
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 
@@ -323,12 +324,30 @@ class WP:
     # ---------- Greenshift stylebook ----------
 
     def gs_settings(self):
-        """Current Greenshift global settings dict (stylebook)."""
-        data = self.get('greenshift/v1/global_settings')
-        settings = data.get('settings') if isinstance(data, dict) else None
-        if isinstance(settings, str):
-            settings = json.loads(settings)
-        return settings or {}
+        """Current Greenshift global settings dict (stylebook).
+
+        Writes go to `global_settings`; reads come from `figma_settings`, which
+        is the endpoint upstream documents for reading and the one that returns
+        the stored variables and classes. A GET on `global_settings` answers with
+        empty lists for both while the front end renders them, so verify against
+        the wrong endpoint reported 0/0 on a populated stylebook.
+        """
+        # GETs on these routes are served from the host's page cache for a while
+        # after a write, answering with the previous (often empty) lists; a unique
+        # query string reads the live record
+        bust = '?_=%d' % int(time.time() * 1000)
+        for route in ('greenshift/v1/figma_settings', 'greenshift/v1/global_settings'):
+            try:
+                data = self.get(route + bust)
+            except WPError:
+                continue
+            settings = data.get('settings') if isinstance(data, dict) else None
+            if isinstance(settings, str):
+                settings = json.loads(settings)
+            if settings and (settings.get('variables') or settings.get('global_classes')):
+                return settings
+            last = settings or {}
+        return last
 
     def gs_merge(self, **keys):
         """

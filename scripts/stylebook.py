@@ -37,7 +37,8 @@ import re
 import sys
 import urllib.request
 
-sys.path.insert(0, __file__.rsplit('\\', 1)[0].rsplit('/', 1)[0])
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from wp_api import WP  # noqa: E402
 
 KINDS = ('color', 'font-size', 'spacing', 'font-family', 'custom')
@@ -72,8 +73,12 @@ def kind_of(var):
     return 'custom'
 
 
-def custom_slug(name):
-    return name.replace('gt-', '', 1) if name.startswith('gt-') else name
+def custom_bucket(name):
+    """(bucket, slug) for settings.custom: the token prefix becomes the bucket,
+    so `gt-radius` is settings.custom.gt.radius and `ketup-pad` is
+    settings.custom.ketup.pad, each emitted as --wp--custom--<bucket>--<slug>."""
+    head, _, tail = name.partition('-')
+    return (head, tail) if tail else ('custom', head)
 
 
 def wp_kebab(text):
@@ -91,7 +96,8 @@ def alias_var(var):
     kind, name = kind_of(var), var_name(var)
     if kind in PRESETS:
         return PRESETS[kind][2] + wp_kebab(name)
-    return '--wp--custom--gt--' + wp_kebab(custom_slug(name))
+    bucket, slug = custom_bucket(name)
+    return '--wp--custom--%s--%s' % (wp_kebab(bucket), wp_kebab(slug))
 
 
 # ---------------------------------------------------------------------------
@@ -137,11 +143,14 @@ def _origin_list(settings, path):
     """
     node = settings
     for key in path[:-1]:
-        node = node.setdefault(key, {})
+        # an emptied dict comes back from PHP as [] : treat it as absent
+        if not isinstance(node.get(key), dict):
+            node[key] = {}
+        node = node[key]
     leaf = node.get(path[-1])
-    if isinstance(leaf, list):
+    if isinstance(leaf, list) and leaf:
         return leaf
-    if leaf is None:
+    if not isinstance(leaf, dict):
         leaf = node[path[-1]] = {}
     return leaf.setdefault('custom', [])
 
@@ -169,13 +178,14 @@ def register_presets(wp, spec, remove=False):
                 entries.append({'slug': name, 'name': var.get('label') or name,
                                 value_key: value})
         else:
-            # settings.custom.gt.<name> -> --wp--custom--gt--<name>
-            bucket = settings.setdefault('custom', {}).setdefault('gt', {})
-            bucket.pop(custom_slug(name), None)
+            # settings.custom.<prefix>.<slug> -> --wp--custom--<prefix>--<slug>
+            bucket_name, slug = custom_bucket(name)
+            bucket = settings.setdefault('custom', {}).setdefault(bucket_name, {})
+            bucket.pop(slug, None)
             if not remove:
-                bucket[custom_slug(name)] = value
+                bucket[slug] = value
             if remove and not bucket:
-                settings['custom'].pop('gt', None)
+                settings['custom'].pop(bucket_name, None)
         aliases[var['variable']] = alias_var(var)
     if remove:
         # leave the record as it was found: no empty origin lists or buckets
@@ -188,6 +198,8 @@ def register_presets(wp, spec, remove=False):
                 leaf.pop('custom', None)
                 if not leaf:
                     node.pop(path[-1], None)
+            if not node and path[0] in settings:
+                settings.pop(path[0], None)      # or PHP hands back [] next time
         if not settings.get('custom'):
             settings.pop('custom', None)
     wp.set_global_styles(settings=settings)

@@ -1,0 +1,20 @@
+{
+ "commit": "9ee807bad47c13fd4a85d8e82abd7fe833a22303",
+ "date": "2026-07-16",
+ "files": {
+  "SKILL.md": "95b93eaeb7166a60",
+  "instructions/attributes.md": "016d78575e91b696",
+  "instructions/charts.md": "623d382edec148a9",
+  "instructions/core-structure.md": "dab9575184351bc2",
+  "instructions/dynamic-loops.md": "80677ff8ef823315",
+  "instructions/dynamic-placeholders.md": "47ebe1e0585c34f0",
+  "instructions/global-settings.md": "54c656569a25cfbc",
+  "instructions/scripts.md": "0215183caf6b05ac",
+  "instructions/validate-scripts.md": "b230136074fdd1d1",
+  "instructions/validate-styles.md": "0584015ec660bf24",
+  "instructions/variables.md": "fb37fe79d956d8eb",
+  "scripts/convert.js": "5e85b1ec8adb2881",
+  "scripts/deconvert.js": "320ef5d655a32396"
+ },
+ "repo": "https://github.com/wpsoul/greenlight-vibe.git"
+}

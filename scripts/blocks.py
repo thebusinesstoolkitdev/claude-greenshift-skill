@@ -52,6 +52,29 @@ DASH = '\\u002d\\u002d'  # escaped `--` for use inside block-comment JSON
 BACKEND = os.environ.get('GREENLIGHT_BACKEND', 'greenshift')
 BACKENDS = ('greenshift', 'core')
 
+# Upstream is explicit that this is the string "1", not a boolean:
+# instructions/validate-styles.md and SKILL.md line 259. A boolean happens to
+# work against the PHP renderer, which is how the wrong value survived.
+CSSRENDER = '1'
+
+# Where the markup is going. Upstream splits the CSS contract by target:
+#   template  patterns, template parts, templates -> CSSRender on every block
+#             carrying styleAttributes or dynamicGClasses
+#   page      pages, posts, custom post types -> NO CSSRender; the page's CSS
+#             goes into the _gspb_post_css meta field as one string
+# SKILL.md:259: "Do not use CSSRender for blocks that will be saved in pages or
+# posts". Header and footer are template parts, so they keep CSSRender.
+TARGET = os.environ.get('GREENLIGHT_TARGET', 'template')
+TARGETS = ('template', 'page')
+
+
+def set_target(name):
+    global TARGET
+    if name not in TARGETS:
+        raise ValueError('target must be one of %s, got %r' % (TARGETS, name))
+    TARGET = name
+    return TARGET
+
 # Attributes Greenshift writes into the HTML from its own JSON keys, so they do
 # not need declaring. `id` is deliberately absent: it comes from `anchor`.
 # Anything not on this list must go into dynamicAttributes or the block fails
@@ -147,6 +170,42 @@ def block(seed, tag='div', inner=None, text=None, style=None, classes=None,
               anchor=anchor)
 
 
+def compile_css(markup):
+    """Compile emitted blocks' styleAttributes into one CSS string.
+
+    Pages and posts do not get CSSRender; upstream puts the whole page's CSS into
+    the `_gspb_post_css` meta field instead (SKILL.md:259). Normally Greenshift's
+    PHP does this compilation, so this reproduces it for the single-value subset
+    this skill emits. That narrowing is what makes it tractable: every value is a
+    one-element array, because breakpoints live in stylebook classes.
+
+    Returns the CSS string. Pass it to WP.set_post_css(page_id, css).
+    """
+    rules = []
+    for m in re.finditer(r'<!-- wp:greenshift-blocks/element (\{.*?\}) -->', markup, re.S):
+        try:
+            attrs = json.loads(m.group(1).replace(DASH, '--'))
+        except ValueError:
+            continue
+        style = attrs.get('styleAttributes')
+        bid = attrs.get('id')
+        if not style or not bid:
+            continue
+        decls = []
+        for prop, value in style.items():
+            if isinstance(value, list):
+                if not value:
+                    continue
+                value = value[0]
+            if value in (None, ''):
+                continue
+            kebab = re.sub(r'(?<!^)(?=[A-Z])', '-', prop).lower()
+            decls.append('%s:%s' % (kebab, value))
+        if decls:
+            rules.append('.%s{%s}' % (bid, ';'.join(decls)))
+    return ''.join(rules)
+
+
 def image(seed, src, alt, width, height, style=None, classes=None, prefix='',
           attrs=None, media_id=None):
     """Image block on the active backend. Always lazy, always with intrinsic
@@ -220,7 +279,8 @@ def _greenshift_block(seed, tag='div', inner=None, text=None, style=None, classe
 
     if style:
         payload['styleAttributes'] = style
-        payload['CSSRender'] = True
+        if TARGET != 'page':
+            payload['CSSRender'] = CSSRENDER
     if name:
         payload['metadata'] = {'name': name}
 
@@ -255,7 +315,8 @@ def _greenshift_image(seed, src, alt, width, height, style=None, classes=None,
         payload['dynamicAttributes'] = declared
     if style:
         payload['styleAttributes'] = style
-        payload['CSSRender'] = True
+        if TARGET != 'page':
+            payload['CSSRender'] = CSSRENDER
     class_attr = block_id + ((' ' + classes) if classes else '')
     return (f'<!-- wp:greenshift-blocks/element {_encode(payload)} -->\n'
             f'<img class="{class_attr}" src="{src}" alt="{alt}" '

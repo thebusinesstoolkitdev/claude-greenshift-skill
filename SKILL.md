@@ -47,8 +47,25 @@ alternative. Needing several of them is a good reason to stay on Greenshift.
 
 If a `greenshift-blocks` skill is available, read it first for block-format basics. This
 skill covers the site-level pipeline and the API behaviour that is not documented anywhere.
-`reference/upstream-block-spec.md` is the block format as WPsoul specifies it, with every
-place this skill deliberately diverges called out, read it before changing anything about
+**Before you change anything about block emission, read the specification itself.**
+
+```
+python scripts/upstream.py sync              # clone it, pin the commit
+python scripts/upstream.py show CSSRender    # grep the real docs
+python scripts/upstream.py show -f validate-styles.md
+python scripts/upstream.py check             # has upstream moved since the pin?
+```
+
+That clones WPsoul's `greenlight-vibe` into `reference/upstream/` so you read primary text.
+This is not optional caution. An earlier version of this file described the format from web
+summaries. The summaries got `CSSRender` wrong, inverted the pages-versus-templates
+contract, omitted `dynamicGClasses` and the `stylemanager` block completely, and listed a
+file that does not exist while missing three that do. A summary of a specification is not a
+specification.
+
+`reference/upstream-block-spec.md` is now only a divergence register: where this skill
+departs from the spec, and why. The spec itself lives upstream and is fetched on demand.
+
 block emission. `reference/site-conventions.md` covers the decisions that are not
 Greenshift-specific, typography measure, link and title hygiene, safe updates, handover. Read it before writing
 page content; most of it is invisible until it is expensive.
@@ -57,12 +74,22 @@ page content; most of it is invisible until it is expensive.
 
 Rules 1-3 are Greenshift-backend specific. Rule 4 applies to both.
 
-1. **`"CSSRender": true` on every block with `styleAttributes`.** REST-pushed blocks never
-   pass through the editor, so nothing compiles their CSS. Without this the page renders
-   completely unstyled. Upstream instead writes one CSS string to the `_gspb_post_css` post
-   meta for pages and reserves `"CSSRender":"1"` for patterns and templates; this skill uses
-   CSSRender everywhere and clears that meta, so a regenerated page cannot inherit stale CSS.
-   Both work, never mix them on one page. See `reference/upstream-block-spec.md`.
+1. **CSS delivery depends on where the markup is going, and the two paths never mix.**
+   Upstream splits it (`instructions/validate-styles.md`, its `SKILL.md:259`):
+
+   | Target | Contract |
+   |---|---|
+   | patterns, template parts, templates | `"CSSRender": "1"` on every block with `styleAttributes` or `dynamicGClasses` |
+   | pages, posts, custom post types | **no CSSRender**; the page's whole CSS goes into the `_gspb_post_css` meta as one string |
+
+   The value is the string `"1"`, not a boolean. A boolean satisfies the PHP renderer,
+   which is exactly why the wrong value survived here unnoticed. REST-pushed blocks never
+   pass through the editor, so nothing compiles their CSS; pick the wrong half of this
+   contract and the page renders unstyled.
+
+   `blocks.set_target('page')` omits CSSRender, and `blocks.compile_css(markup)` builds the
+   string for `WP.set_post_css()`. Default is `template`, correct for the header and footer,
+   which are template parts.
 2. **Single-value `styleAttributes` only.** The format is a four-value responsive array,
    `["desktop","tablet","mobile_landscape","mobile_portrait"]`, with fewer values applying
    upward. Multi-value arrays pushed over REST were observed dropping the smallest entry so

@@ -222,6 +222,18 @@ class WP:
         """Remove stale _gspb_post_css meta left behind by editor saves."""
         return self.post('greenshift/v1/css_settings', {'id': post_id, 'css': ''})
 
+    def set_post_css(self, post_id, css):
+        """Write a page's compiled CSS to _gspb_post_css.
+
+        This is the documented contract for pages and posts, which do not carry
+        CSSRender. Pair it with blocks.compile_css() over the markup you pushed:
+
+            html = build_page()
+            wp.update_page(pid, content=html)
+            wp.set_post_css(pid, blocks.compile_css(html))
+        """
+        return self.post('greenshift/v1/css_settings', {'id': post_id, 'css': css})
+
     # ---------- template parts ----------
 
     def get_template_part(self, theme, slug):

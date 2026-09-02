@@ -224,6 +224,15 @@ system. Build it before generating pages so pages can simply reference classes.
 Merge semantics: each key you send **replaces** the stored array. Always read, merge
 locally, then write, `WP.gs_upsert_classes()` and `scripts/stylebook.py push` do this.
 
+**The stylebook prints before the theme's global styles**, so a class rule loses every
+equal-specificity tie to theme.json that a page stylesheet (printed last) would have won.
+Prefix class selectors with `body` the same way as element styles, `body .gt-card{…}`,
+0,1,1 beats 0,1,0 with no `!important`. Keep rules in the order the design wrote them:
+grouping every rule under its first class silently reorders two equal-specificity rules
+(`.head .small` before `.dark .small` becomes the reverse) and flips a colour. Moving a
+site's CSS out of a page into the stylebook was verified with a computed-style diff of
+every element on the rendered page, which is the only check that catches this.
+
 **On the `core` backend there is no Greenshift to hold the classes**, but the markup still
 references them, so they have to be defined somewhere or the page ships unstyled. Same spec,
 rendered as CSS onto the FSE global-styles record:

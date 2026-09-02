@@ -106,6 +106,13 @@ it and the one-off probes of 2026-09-02 established on Greenlight 2.1 / gl-page-
 - user-level presets under `palette.custom`, `fontSizes.custom`, `spacingSizes.custom` and
   `settings.custom` all reach the page as CSS variables, with kebab-cased slugs
 - `--` dash escapes and the `<` icon escapes both round-trip intact
+- a stylemanager carrier `<div>` is not printed on the front end, so its class list
+  cannot leak styles into the page
+- a block carrying editor-written `inlineCssStyles` plus `CSSRender:"1"` is emitted once,
+  not twice
+- the Greenshift stylebook CSS prints before the theme's `global-styles-inline-css`; REST
+  GETs on `figma_settings` and `global_settings` are page-cached after a write and need a
+  unique query string to read the live record
 
 WordPress re-serialises the JSON minified on save, so verification must parse rather than
 grep. See the troubleshooting entry on that.

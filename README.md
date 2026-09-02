@@ -13,9 +13,9 @@ pass, takes about an hour end to end.
 
 - **The pipeline**, read a design, export and optimise its images, push a token-based
   design system, generate blocks, create pages, patch the theme's header and footer.
-- **The API behaviour that is not documented**, the Greenshift responsive-array bug, the
-  `CSSRender` requirement, Gutenberg's attribute-validation trap, Fluent Forms' duplicate
-  settings rows, Rank Math's REST gap. Each one cost hours to find; see
+- **The API behaviour that is not documented**, the `CSSRender` string-versus-boolean
+  and pages-versus-templates contract, Gutenberg's attribute-validation trap, Fluent Forms'
+  duplicate settings rows, Rank Math's REST gap. Each one cost hours to find; see
   [`reference/troubleshooting.md`](reference/troubleshooting.md).
 - **Working tools**, a REST client, a block builder, a WCAG contrast gate, a stylebook
   installer, a live-page verifier, and launch automation.
@@ -56,11 +56,15 @@ SKILL.md                      the skill itself: pipeline, rules, gotchas
 scripts/
   wp_api.py                   WordPress / Greenshift / Fluent Forms REST client
   blocks.py                   block builder: core or greenshift backend, same calls
-  stylebook.py                push and verify the design system
+  stylebook.py                push and verify the design system; --theme registers tokens as presets
+  probe_responsive.py         what the live renderer actually emits, before you trust a rule
+  convert_html.py             upstream's convert.js plus the delivery contract, for one HTML design
   check_contrast.py           WCAG gate: fix the token, not the usage
   prep_images.py              raster -> WebP, sizing, alt-text-gated upload
   verify.py                   live-page checks: headings, alt text, accessible names, CSS
+  check_blocks.py             pre-push audit of generated block markup
   check_links.py              cross-page checks: links, anchors, draft links, nav drift
+  upstream.py                 fetch and pin WPsoul's spec; detect drift
   launch.py                   plugins, branded form, notification emails, SEO
 reference/
   starter-tokens.json         a complete working design system to adapt
@@ -77,12 +81,15 @@ examples/
 
 ## Three rules it enforces
 
-1. **`"CSSRender": true`** on every block with `styleAttributes`. REST-pushed blocks never
-   pass through the editor, so nothing compiles their CSS. Without this the page renders
-   completely unstyled.
-2. **Single-value `styleAttributes`.** Server-side rendering mishandles multi-value
-   responsive arrays: the mobile entry is dropped and mobile inherits desktop. Fluid values
-   use `clamp()`; breakpoints live in stylebook classes.
+1. **CSS goes where the markup goes.** Template parts, templates and patterns get
+   `"CSSRender": "1"` (the string) on every block with `styleAttributes`; pages and posts
+   get none, and their CSS goes into the `_gspb_post_css` meta instead. REST-pushed blocks
+   never pass through the editor, so pick the wrong half and the page renders unstyled.
+2. **Responsive arrays are verified, not assumed.** `styleAttributes` take four-entry
+   arrays (desktop, tablet, mobile landscape, mobile portrait). `scripts/probe_responsive.py`
+   pushes every shape at a live site and diffs the compiled CSS, so a new plugin version
+   gets checked rather than trusted. The core backend has no per-block breakpoints and
+   raises instead.
 3. **Declare custom attributes in the block JSON.** `data-*`, `aria-*` and `role` must be in
    `dynamicAttributes` as well as the HTML, or Gutenberg's validator strips them on
    "Attempt recovery".

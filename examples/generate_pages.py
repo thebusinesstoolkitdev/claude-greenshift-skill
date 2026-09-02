@@ -56,7 +56,7 @@ def block(seed, tag, inner=None, text=None, style=None, extra=None, html_attrs='
 def img(seed, src, alt, w, h, style):
     i = sid(seed)
     j = {"id": i, "tag": "img", "localId": i, "src": src, "alt": alt,
-         "originalWidth": w, "originalHeight": h, "styleAttributes": style, "CSSRender": True}
+         "originalWidth": w, "originalHeight": h, "styleAttributes": style, "CSSRender": "1"}
     js = json.dumps(j, ensure_ascii=False).replace('--', D)
     return (f'<!-- wp:greenshift-blocks/element {js} -->\n'
             f'<img class="{i}" src="{src}" alt="{alt}" width="{w}" height="{h}" loading="lazy"/>\n'

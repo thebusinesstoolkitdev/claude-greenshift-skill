@@ -208,19 +208,45 @@ class WP:
         payload.update(extra)
         return self.post('wp/v2/pages', payload)
 
-    def update_page(self, page_id, content=None, **extra):
+    def update_page(self, page_id, content=None, clear_css=True, **extra):
         payload = dict(extra)
         if content is not None:
             payload['content'] = content
         page = self.post(f'wp/v2/pages/{page_id}', payload)
-        if content is not None:
-            # Drop editor-compiled CSS so server-side CSSRender takes over.
+        if content is not None and clear_css:
+            # Only valid on the CSSRender path, where the server compiles CSS from
+            # block attributes and stale meta would shadow it. On the documented
+            # page path this field IS the page's stylesheet, so clearing it here
+            # wipes what set_post_css() just wrote. Pass clear_css=False, or call
+            # set_post_css() after this.
             self.clear_post_css(page_id)
         return page
 
     def clear_post_css(self, post_id):
         """Remove stale _gspb_post_css meta left behind by editor saves."""
         return self.post('greenshift/v1/css_settings', {'id': post_id, 'css': ''})
+
+    def set_block_js(self, scripts):
+        """Register block scripts in the `gspb_block_js` option.
+
+        Greenshift reads frontend scripts from that option, not from post
+        content, and the editor is what normally writes it. Blocks inserted
+        programmatically carry `customJs` that never runs until this is called.
+
+        `scripts` maps block id to code: {"gsbp-abc1234": "console.log(1)"}.
+        The endpoint merges into the existing option; an empty value removes a
+        key. `{{PLUGIN_URL}}` placeholders are resolved by PHP at render time,
+        so leave them intact here.
+
+        This is upstream's Option B. Option A is WP-CLI `wp option update
+        gspb_block_js`. Option C, which this skill uses by default, is to drop
+        the script into a `wp:html` block at the end of the page instead: no
+        option write, no manage_options capability, and it survives a host that
+        blocks the endpoint. On that path `{{PLUGIN_URL}}` must be replaced with
+        the real path, because raw wp:html output is never processed by PHP.
+        """
+        payload = [{block_id: code} for block_id, code in scripts.items()]
+        return self.post('greenshift/v1/update-custom-js', {'js': payload})
 
     def set_post_css(self, post_id, css):
         """Write a page's compiled CSS to _gspb_post_css.
@@ -236,11 +262,63 @@ class WP:
 
     # ---------- template parts ----------
 
-    def get_template_part(self, theme, slug):
+    def template_parts(self):
+        """Every template part the active theme exposes, with `area` and `source`."""
+        return self.get('wp/v2/template-parts?context=edit')
+
+    def find_template_part(self, area):
+        """Resolve (theme, slug) for the part filling `area` ('header', 'footer').
+
+        Any FSE theme, not only Greenlight: the slug is read from the site rather
+        than assumed. A customised copy (source "custom") wins over the theme
+        file, and an exact slug match wins over another part in the same area.
+        """
+        parts = self.template_parts()
+        hits = [p for p in parts if p.get('area') == area] or \
+               [p for p in parts if p.get('slug') == area]
+        if not hits:
+            raise LookupError('no template part with area or slug %r; found %s'
+                              % (area, sorted(p.get('slug') for p in parts)))
+        hits.sort(key=lambda p: (p.get('slug') != area, p.get('source') != 'custom'))
+        return hits[0]['theme'], hits[0]['slug']
+
+    def get_template_part(self, theme=None, slug=None, area=None):
+        """Read a template part by (theme, slug), or by area= to discover both."""
+        if area:
+            theme, slug = self.find_template_part(area)
         return self.get(f'wp/v2/template-parts/{theme}//{slug}?context=edit')
 
-    def set_template_part(self, theme, slug, content):
+    def set_template_part(self, theme=None, slug=None, content=None, area=None):
+        if area:
+            theme, slug = self.find_template_part(area)
+        if content is None:
+            raise ValueError('set_template_part needs content')
         return self.post(f'wp/v2/template-parts/{theme}//{slug}', {'content': content})
+
+    # ---------- global styles (theme.json user record) ----------
+
+    def global_styles_id(self):
+        """Id of the user-level global-styles record for the active theme.
+
+        `wp/v2/global-styles/themes/{slug}` returns the theme's own data without
+        an id; the editable record is linked from the theme itself.
+        """
+        theme = self.get('wp/v2/themes?status=active')[0]
+        href = theme['_links']['wp:user-global-styles'][0]['href']
+        return int(href.rstrip('/').rsplit('/', 1)[-1])
+
+    def global_styles(self):
+        return self.get('wp/v2/global-styles/%d?context=edit' % self.global_styles_id())
+
+    def set_global_styles(self, settings=None, styles=None):
+        """Write settings and/or styles on the user record. Each is replaced whole,
+        so read with global_styles(), merge locally, then write."""
+        payload = {}
+        if settings is not None:
+            payload['settings'] = settings
+        if styles is not None:
+            payload['styles'] = styles
+        return self.post('wp/v2/global-styles/%d' % self.global_styles_id(), payload)
 
     # ---------- Greenshift stylebook ----------
 

@@ -107,6 +107,15 @@ def check(url):
                             "overridden — adjacent full-width sections will show a seam. "
                             "Add `body .is-layout-flow > * { margin-block-start: 0 }`")
 
+    # A rendered-contrast pass belongs here and is not implemented. An attempt
+    # that greps declared color/background pairs out of the page CSS matched 46
+    # pairs standalone and zero from inside this function; rather than ship a
+    # check that always reports "0 failures" (which reads as a pass) it is left
+    # out. The real version needs computed styles per element from a browser,
+    # because what actually ships broken is inherited colour, not same-rule
+    # pairs: an accent eyebrow on a dark band, footer text on a tinted surface.
+    # check_contrast.py still gates the palette offline, which is a different job.
+
     nameless = []
     for match in re.finditer(r'<(a|button)\b([^>]*)>(.*?)</\1>', html, re.S | re.I):
         tag, attrs, inner = match.group(1), match.group(2), match.group(3)
@@ -130,7 +139,9 @@ def check(url):
     unstyled = block_classes - styled
     notes.append(f'blocks: {len(block_classes)}, with CSS: {len(styled)}')
     if block_classes and len(styled) == 0:
-        problems.append('NO block CSS emitted, blocks are missing "CSSRender": true, '
+        problems.append('NO block CSS emitted. On a template target blocks need '
+                        '"CSSRender": "1"; on a page target the CSS belongs in the '
+                        '_gspb_post_css meta. '
                         'or stale _gspb_post_css is overriding (clear it via css_settings)')
 
     tokens = set(re.findall(r'(--gt-[a-z0-9-]+)\s*:', html))

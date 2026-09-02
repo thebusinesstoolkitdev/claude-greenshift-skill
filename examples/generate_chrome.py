@@ -92,7 +92,7 @@ def icon_link(seed, path, label, href, vb):
     svg_i = sid(seed + 'svg')
     svg_json = json.dumps({"id": svg_i, "tag": "svg", "localId": svg_i,
         "dynamicAttributes": [{"name": "aria-hidden", "value": "true"}],
-        "styleAttributes": {"width": ["18px"], "height": ["18px"], "fill": ["currentColor"]}, "CSSRender": True}).replace('--', D)
+        "styleAttributes": {"width": ["18px"], "height": ["18px"], "fill": ["currentColor"]}, "CSSRender": "1"}).replace('--', D)
     svg = (f'<!-- wp:greenshift-blocks/element {svg_json} -->\n'
            f'<svg viewBox="{vb}" width="18" height="18" class="{svg_i}" aria-hidden="true"><path d="{path}" /></svg>\n'
            f'<!-- /wp:greenshift-blocks/element -->')
@@ -102,7 +102,7 @@ def icon_link(seed, path, label, href, vb):
             "width": ["36px"], "height": ["36px"], "borderRadius": ["50%"], "color": ["var(--gt-ink, #33291f)"],
             "transition": ["all 0.25s ease"], "color_hover": ["var(--gt-purple, #7e5aa6)"],
             "backgroundColor_hover": ["rgba(126,90,166,0.08)"]},
-        "CSSRender": True, "metadata": {"name": label}}, ensure_ascii=False).replace('--', D)
+        "CSSRender": "1", "metadata": {"name": label}}, ensure_ascii=False).replace('--', D)
     return (f'<!-- wp:greenshift-blocks/element {j} -->\n'
             f'<a class="{i}" href="{href}" aria-label="{label}">\n{svg}\n</a>\n'
             f'<!-- /wp:greenshift-blocks/element -->\n')
@@ -172,7 +172,7 @@ def fcolhead(seed, label):
 
 logo_json = json.dumps({"id": sid('ftlogoi'), "tag": "img", "localId": sid('ftlogoi'),
     "src": f"{U}/brand-logo.png", "alt": "Marigold & Fern", "originalWidth": 348, "originalHeight": 200,
-    "styleAttributes": {"width": ["150px"], "height": ["auto"], "marginBottom": ["1.2rem"]}, "CSSRender": True}).replace('--', D)
+    "styleAttributes": {"width": ["150px"], "height": ["auto"], "marginBottom": ["1.2rem"]}, "CSSRender": "1"}).replace('--', D)
 logo_img = (f'<!-- wp:greenshift-blocks/element {logo_json} -->\n'
             f'<img class="{sid("ftlogoi")}" src="{U}/brand-logo.png" alt="Marigold & Fern" width="348" height="200" loading="lazy"/>\n'
             f'<!-- /wp:greenshift-blocks/element -->\n')

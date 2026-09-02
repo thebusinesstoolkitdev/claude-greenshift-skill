@@ -24,20 +24,27 @@ generator written to the house style ports with little friction.
 
 The Greenshift rules below apply to that backend and are baked in:
 
-1. CSSRender. Every block carrying styleAttributes gets `"CSSRender": true` so the
-   SERVER compiles its CSS. REST-pushed blocks never get editor-compiled CSS, so
-   without this they render completely unstyled.
+1. CSSRender. On a template target every block carrying styleAttributes gets
+   `"CSSRender": "1"` (the string, not a boolean) so the SERVER compiles its CSS;
+   REST-pushed blocks never get editor-compiled CSS. On a page target no block
+   carries it and the page's CSS goes to _gspb_post_css instead. Never add it to
+   a block you did not author: the theme's blocks ship styleAttributes next to
+   compiled inlineCssStyles, and re-emitting the raw values overrides them.
 2. Escaped dashes. HTML comments cannot contain `--`, so CSS custom properties are
    escaped to \\u002d\\u002d inside the block JSON.
 3. Declared attributes, any data-*/aria-*/role attribute must appear BOTH in the
    block JSON (`dynamicAttributes`) and in the HTML. Raw-only attributes fail block
    validation, Gutenberg offers "Attempt recovery", and recovery strips them.
 
-Also: keep styleAttributes SINGLE-VALUE (use clamp()/min()). The format is a
-four-value responsive array, ["desktop","tablet","mobile_landscape","mobile_portrait"],
-fewer values applying upward, but multi-value arrays pushed over REST were observed
-dropping the smallest entry, so mobile inherited desktop. Put breakpoint logic in
-stylebook classes instead.
+styleAttributes values are responsive arrays,
+["desktop","tablet","mobile_landscape","mobile_portrait"], fewer entries applying
+upward. Multi-value arrays are safe over REST: verified against Greenlight 2.1 /
+gl-page-builder 3.3.7 with `scripts/probe_responsive.py`, which pushes every shape
+(1-4 entries, null and "" gaps, gridTemplateColumns) and reads the compiled CSS
+back. The PHP renderer emits max-width rules at the BREAKPOINTS below and
+`compile_css()` mirrors it for page targets. The core backend has no per-block
+breakpoints at all, so a multi-value array raises there and the breakpoint goes in
+a stylebook class.
 
 `type` is always emitted, one of "text" / "inner" / "no", matching upstream's
 converter. Images and empty elements are "no".
@@ -56,6 +63,11 @@ BACKENDS = ('greenshift', 'core')
 # instructions/validate-styles.md and SKILL.md line 259. A boolean happens to
 # work against the PHP renderer, which is how the wrong value survived.
 CSSRENDER = '1'
+
+# Greenshift's responsive breakpoints, in styleAttributes array order. Index 0 is
+# desktop (no media query). Read off the PHP renderer's own output; if a probe
+# against a newer plugin shows different values, change them here only.
+BREAKPOINTS = (None, '991.98px', '767.98px', '575.98px')
 
 # Where the markup is going. Upstream splits the CSS contract by target:
 #   template  patterns, template parts, templates -> CSSRender on every block
@@ -175,9 +187,16 @@ def compile_css(markup):
 
     Pages and posts do not get CSSRender; upstream puts the whole page's CSS into
     the `_gspb_post_css` meta field instead (SKILL.md:259). Normally Greenshift's
-    PHP does this compilation, so this reproduces it for the single-value subset
-    this skill emits. That narrowing is what makes it tractable: every value is a
-    one-element array, because breakpoints live in stylebook classes.
+    PHP does this compilation; this reproduces its output for element blocks:
+    one rule per block for the desktop entry, then one `@media (max-width: ...)`
+    rule per further entry at BREAKPOINTS. `null` and `""` entries are skipped,
+    the same as the renderer. `customCSS_Extra` is passed through with
+    `{CURRENT}` resolved to the block selector.
+
+    Stylemanager blocks contribute their `dynamicGClasses[].css` and `customCss`
+    verbatim, so one call covers a page's own classes and its block styles.
+
+    `scripts/probe_responsive.py --parity` diffs this against the live renderer.
 
     Returns the CSS string. Pass it to WP.set_post_css(page_id, css).
     """
@@ -187,22 +206,40 @@ def compile_css(markup):
             attrs = json.loads(m.group(1).replace(DASH, '--'))
         except ValueError:
             continue
-        style = attrs.get('styleAttributes')
         bid = attrs.get('id')
+        # a stylemanager block carries whole CSS strings rather than properties:
+        # the class rule (with its media queries) and one string per sub-selector,
+        # which is exactly the set the PHP renderer emits for template targets
+        for cls in attrs.get('dynamicGClasses') or []:
+            if cls.get('css'):
+                rules.append(cls['css'])
+            for sel in cls.get('selectors') or []:
+                if sel.get('css'):
+                    rules.append(sel['css'])
+        if attrs.get('customCss'):
+            rules.append(attrs['customCss'])
+        style = attrs.get('styleAttributes')
         if not style or not bid:
             continue
-        decls = []
+        per_bp = [[] for _ in BREAKPOINTS]
+        extra = []
         for prop, value in style.items():
-            if isinstance(value, list):
-                if not value:
-                    continue
-                value = value[0]
-            if value in (None, ''):
+            if prop == 'customCSS_Extra':
+                extra.append(str(value).replace('{CURRENT}', '.' + bid))
                 continue
+            values = value if isinstance(value, list) else [value]
             kebab = re.sub(r'(?<!^)(?=[A-Z])', '-', prop).lower()
-            decls.append('%s:%s' % (kebab, value))
-        if decls:
-            rules.append('.%s{%s}' % (bid, ';'.join(decls)))
+            for i, v in enumerate(values[:len(BREAKPOINTS)]):
+                if v in (None, ''):
+                    continue
+                per_bp[i].append('%s:%s' % (kebab, v))
+        for i, decls in enumerate(per_bp):
+            if not decls:
+                continue
+            rule = '.%s{%s;}' % (bid, ';'.join(decls))
+            rules.append(rule if BREAKPOINTS[i] is None
+                         else '@media (max-width:%s){%s}' % (BREAKPOINTS[i], rule))
+        rules.extend(extra)
     return ''.join(rules)
 
 
@@ -229,7 +266,8 @@ def _greenshift_block(seed, tag='div', inner=None, text=None, style=None, classe
     tag        html tag ('div', 'section', 'h2', 'a', 'button', 'article', ...)
     inner      child block markup (makes this a container: type="inner")
     text       text content (mutually exclusive with inner)
-    style      dict of styleAttributes, SINGLE-VALUE lists: {"marginTop": ["0px"]}
+    style      dict of styleAttributes, responsive lists: {"padding": ["40px","24px"]}
+               (desktop, tablet, mobile_landscape, mobile_portrait; fewer apply upward)
     classes    extra css classes (stylebook global classes), str or list
     attrs      dict of html attributes; data-*/aria-*/role are auto-declared in JSON
     extra      extra top-level block JSON keys (href, isVariation, formAttributes, ...)
@@ -271,6 +309,16 @@ def _greenshift_block(seed, tag='div', inner=None, text=None, style=None, classe
     # `id` is excluded when it came from anchor: Greenshift renders it from that
     # key, so declaring it again would emit the attribute twice
     rendered = _RENDERED_ATTRS | ({'id'} if anchor else frozenset())
+    # `type` on a form control goes in formAttributes, never the main JSON and
+    # never dynamicAttributes: the spec is explicit about that placement
+    if tag in ('button', 'input', 'textarea', 'select'):
+        form = dict(payload.get('formAttributes') or {})
+        for key in ('type', 'name', 'placeholder', 'required', 'value'):
+            if key in attrs:
+                form[key] = attrs[key]
+                rendered = rendered | {key}
+        if form:
+            payload['formAttributes'] = form
     declared = [{'name': k, 'value': str(v)} for k, v in attrs.items()
                 if k not in rendered]
     if declared:
@@ -290,6 +338,9 @@ def _greenshift_block(seed, tag='div', inner=None, text=None, style=None, classe
     if alignfull:
         class_list.append('alignfull')
     class_attr = ' '.join(class_list)
+    # the spec requires className in the JSON, duplicated in the HTML class
+    # attribute; the editor reads the JSON, the front end reads the markup
+    payload['className'] = class_attr
 
     open_tag = f'<{tag} class="{class_attr}"{_attr_string(attrs)}>'
     if text is not None:
@@ -364,8 +415,17 @@ def _core_style(style, seed):
         if not path:
             rejected.append(prop)
             continue
-        if isinstance(value, list):          # single-value lists, per the house rule
-            value = value[0]
+        if isinstance(value, list):
+            present = [v for v in value if v not in (None, '')]
+            if len(present) > 1:
+                raise ValueError(
+                    'core blocks have no per-block breakpoints, and %r on block %r '
+                    'carries %d responsive values. Put the breakpoint in a stylebook '
+                    'class (classes=) or collapse it to one fluid value with clamp()/min().'
+                    % (prop, seed, len(present)))
+            if not present:
+                continue
+            value = present[0]
         node = out
         for key in path[:-1]:
             node = node.setdefault(key, {})
@@ -489,8 +549,9 @@ def svg_icon(seed, path, viewbox='0 0 512 512', size='18px', fill='currentColor'
                'icon': {'icon': {'svg': _RawJSON(escaped), 'image': ''},
                         'fill': fill, 'fillhover': fill, 'type': 'svg'},
                'dynamicAttributes': [{'name': 'aria-hidden', 'value': 'true'}],
-               'styleAttributes': {'width': [size], 'height': [size], 'fill': [fill]},
-               'CSSRender': True}
+               'styleAttributes': {'width': [size], 'height': [size], 'fill': [fill]}}
+    if TARGET != 'page':
+        payload['CSSRender'] = CSSRENDER
     return (f'<!-- wp:greenshift-blocks/element {_encode(payload)} -->\n'
             f'<svg viewBox="{viewbox}" class="{block_id}" aria-hidden="true">'
             f'<path d="{path}" /></svg>\n'
@@ -558,11 +619,17 @@ def section(seed, inner, bg=None, bg_image=None, pad='var(--gt-section-pad, clam
         return block(seed, tag, inner=inner, style=style, classes='gt-section',
                      name=name, alignfull=True, prefix=prefix)
 
+    # The documented full-width shell: `wp-section alignfull` carrying
+    # data-type="section-component", with the side padding and margins coming
+    # from the theme's own variables. Keep the alignfull class, the wide-size
+    # variable and the spacing-side variable; padding top/bottom is yours to set.
     style = {
         'display': ['flex'], 'justifyContent': ['center'], 'flexDirection': ['column'],
         'alignItems': ['center'],
-        'paddingLeft': ['min(3vw, 20px)'], 'paddingRight': ['min(3vw, 20px)'],
-        'paddingTop': [pad], 'paddingBottom': [pad], 'marginBlockStart': ['0px'],
+        'paddingLeft': ['var(--wp--spacing--side, min(3vw, 20px))'],
+        'paddingRight': ['var(--wp--spacing--side, min(3vw, 20px))'],
+        'paddingTop': [pad], 'paddingBottom': [pad],
+        'marginTop': ['0px'], 'marginBottom': ['0px'], 'position': ['relative'],
     }
     if bg:
         style['backgroundColor'] = [bg]
@@ -570,9 +637,113 @@ def section(seed, inner, bg=None, bg_image=None, pad='var(--gt-section-pad, clam
         style['backgroundImage'] = [f'url({bg_image})']
         style['backgroundSize'] = ['cover']
         style['backgroundPosition'] = ['center center']
-    return block(seed, tag, inner=inner, style=style,
+    return block(seed, tag, inner=inner, style=style, classes='wp-section',
+                 attrs={'data-type': 'section-component'},
                  extra={'isVariation': 'contentwrapper'}, name=name,
                  alignfull=True, prefix=prefix)
+
+
+def local_classes(classes):
+    """Normalise local-class input to the shape upstream's converter emits.
+
+    Accepts a dict {name: css}, or a list of dicts carrying `value` (or `id`)
+    and `css`. Entries that already carry `type` are taken as complete. The
+    converter's shape is used rather than the two-key example in
+    validate-styles.md because it is what `deconvert.js` reads back and what
+    the editor's class manager displays; the short shape renders but does not
+    round-trip.
+    """
+    if not classes:
+        return []
+    items = ([{'value': k, 'css': v} for k, v in classes.items()]
+             if isinstance(classes, dict) else list(classes))
+    out = []
+    for item in items:
+        if 'type' in item and 'value' in item:
+            out.append(item)
+            continue
+        name = item.get('value') or item.get('id')
+        css = item.get('css', '')
+        if not name:
+            raise ValueError('local class without a name: %r' % (item,))
+        mentioned = css + ''.join(s.get('css', '') for s in item.get('selectors') or [])
+        if ('.' + name) not in mentioned:
+            raise ValueError(
+                "local class %r has CSS that never mentions .%s; the renderer emits "
+                "the css string verbatim, so this rule would style nothing." % (name, name))
+        out.append({'value': name, 'type': 'local', 'label': item.get('label', name),
+                    'localed': False, 'css': css,
+                    'attributes': {'styleAttributes': item.get('styleAttributes') or {}},
+                    'originalBlock': 'greenshift-blocks/element',
+                    'selectors': item.get('selectors') or []})
+    return out
+
+
+def style_manager(seed, classes=None, custom_css=None, custom_js=None, name=None,
+                  prefix=''):
+    """A stylemanager block: one page's own classes and CSS, carried in the block tree.
+
+    This is how upstream's converter ships CSS that belongs to one page rather
+    than to the site: an empty block with `isVariation: "stylemanager"` holding
+    `dynamicGClasses`, instead of pushing every class into the global stylebook.
+    The split is by scope, not by mechanism:
+
+        site-wide tokens and shared layout   stylebook (global_settings)
+        this page's own classes              style_manager(...)
+        compiled block styles on a page      _gspb_post_css via compile_css()
+
+    One stylemanager per page, first in the content. Reference its classes from
+    ordinary blocks with classes=. On a template target it carries CSSRender like
+    any styled block; on a page target compile_css() folds its CSS into the page
+    stylesheet.
+
+    classes     {'home-hero': '.home-hero{...}', ...} or a list, see local_classes()
+    custom_css  CSS that belongs to no class (tag, body, keyframes); `customCss`.
+                Page targets only: compile_css() folds it into the page CSS. The
+                PHP renderer behind CSSRender emits dynamicGClasses[].css and
+                selectors[].css and nothing else, so on a template target
+                customCss (and customCSS_Extra anywhere) is editor-only. Verified
+                by probe_responsive.py; a template part's class-less CSS belongs
+                in the stylebook, which is site-wide like the part itself.
+    custom_js   script for this page, event-delegated on document
+    """
+    bid = make_id(seed, prefix)
+    local = local_classes(classes)
+    if custom_css and TARGET != 'page':
+        raise ValueError(
+            'style_manager(custom_css=...) on a template target: the PHP renderer '
+            'ignores customCss, so this CSS would never reach the page. Put it in a '
+            'stylebook class (a template part is site-wide anyway) or, if it must '
+            'travel with the part, inside a local class string: '
+            "classes={'part-css': '.part-css{} " + custom_css[:40].replace("'", '"') + "...'}")
+    payload = {'id': bid, 'tag': 'div', 'type': 'no', 'localId': bid,
+               'isVariation': 'stylemanager'}
+    if local:
+        payload['dynamicGClasses'] = local
+    if custom_css:
+        payload['customCss'] = custom_css
+    if custom_js:
+        payload['customJs'] = custom_js
+        payload['customJsEnabled'] = True
+    if name:
+        payload['metadata'] = {'name': name}
+    # CSSRender applies to template targets only, same rule as any other block
+    if TARGET != 'page' and (local or custom_css):
+        payload['CSSRender'] = CSSRENDER
+    # the carrier div lists every local class, which is how the editor's class
+    # manager finds them and how deconvert.js reads them back
+    names = ' '.join(c['value'] for c in local)
+    if names:
+        payload['className'] = names
+    class_attr = ' class="%s"' % names if names else ''
+    open_c = '<!-- wp:greenshift-blocks/element ' + _encode(payload) + ' -->'
+    return open_c + '\n<div%s></div>\n' % class_attr + '<!-- /wp:greenshift-blocks/element -->\n'
+
+
+def has_greenshift_blocks(markup):
+    """True when markup carries Greenshift element blocks, which is how to tell a
+    Greenlight header (patch surgically) from another theme's (rewrite freely)."""
+    return 'wp:greenshift-blocks/' in (markup or '')
 
 
 def container(seed, inner, width='1290px', name=None, prefix=''):
@@ -582,14 +753,21 @@ def container(seed, inner, width='1290px', name=None, prefix=''):
         # layout handles the rest
         return block(seed, 'div', inner=inner, name=name, prefix=prefix,
                      classes='gt-container')
+    # documented inner wrapper: width from the theme's wide-size variable
     return block(seed, 'div', inner=inner, name=name, prefix=prefix,
-                 style={'maxWidth': ['100%'], 'width': [width], 'display': ['flex'],
-                        'flexDirection': ['column'], 'alignItems': ['center']})
+                 classes='wp-content-wrap',
+                 attrs={'data-type': 'content-area-component'},
+                 style={'maxWidth': ['100%'],
+                        'width': ['var(--wp--style--global--wide-size, %s)' % width],
+                        'display': ['flex'], 'flexDirection': ['column'],
+                        'alignItems': ['center']})
 
 
 def grid(seed, inner, variant='gt-grid-4', style=None, name=None, prefix=''):
     """
-    Responsive grid. Breakpoints live in the stylebook class, NOT in styleAttributes.
+    Responsive grid on a shared stylebook class. The class carries the breakpoints
+    because the layout is shared across pages, not because responsive arrays are
+    unsafe; a one-off grid can pass style={'gridTemplateColumns': [...]} directly.
     variant: gt-grid-2 | gt-grid-3 | gt-grid-4 | gt-grid-even | gt-grid-split
     """
     return block(seed, 'div', inner=inner, classes=variant, style=style,

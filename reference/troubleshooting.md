@@ -33,16 +33,40 @@ _Greenshift backend only._
 **Symptom**. Tablet styling is correct, but at 375px the layout falls back to the desktop
 value. A three-column footer stays three columns and squeezes.
 
-**Cause**. Greenshift's *server-side* CSSRender mishandles three-entry responsive arrays.
-`["1fr 1fr 1fr", "1fr 1fr", "1fr"]` compiles the tablet entry scoped to
-`(min-width:768px) and (max-width:991.98px)` and drops the mobile entry entirely. The
-editor's own compiler handles these fine, which is why it looks correct in the editor and
-breaks on the front end.
+**What it is not**. An earlier version of this entry blamed the PHP renderer for dropping
+the mobile entry of three-entry arrays. That does not reproduce: against Greenlight 2.1 /
+gl-page-builder 3.3.7, `["1fr 1fr 1fr", "1fr 1fr", "1fr"]` compiles to a desktop rule plus
+`max-width` rules at 991.98px and 767.98px, and the 767.98px rule also covers 375px. Run
+`python scripts/probe_responsive.py` to confirm on the site in front of you.
 
-**Fix**. Never put multi-value arrays in `styleAttributes` on REST-pushed blocks. Use a
-single value with `clamp()`/`min()` for fluid properties, and put every breakpoint in a
-stylebook global class (`gt-grid-4`, `gt-footer-grid`, …). Media queries inside global class
-CSS are emitted verbatim and work correctly.
+**Causes that do reproduce**, in order of likelihood:
+
+1. The page target. Pages get no `CSSRender`, so the array is only compiled if you called
+   `compile_css()` and pushed the result with `WP.set_post_css()`. An old `compile_css()`
+   only emitted the desktop entry; the current one emits every breakpoint.
+2. A stale copy of the CSS in `_gspb_post_css` from a previous push, or LiteSpeed's page
+   cache serving the previous render. Clear both (`WP.clear_post_css()`, purge cache).
+3. The core backend, which has no per-block breakpoints. `_core_style` raises on a
+   multi-value array; if a generator swallows that error the breakpoint never existed.
+
+---
+
+## CSS in a stylemanager block reaches the editor but not the front end
+
+_Greenshift backend, template parts / templates / patterns._
+
+**Symptom**. A tag-led rule (`nav a`, `:root{--x}`, `@keyframes`) or a `customCSS_Extra`
+shows in the editor canvas and is absent from the rendered page, while the local classes in
+the same block work.
+
+**Cause**. The PHP renderer behind `CSSRender` emits `styleAttributes` properties,
+`dynamicGClasses[].css` and `dynamicGClasses[].selectors[].css`, and nothing else.
+`customCss` and `customCSS_Extra` are compiled by the editor's JavaScript only. Verified
+with `probe_responsive.py`; `check_blocks.py` flags both on a template target.
+
+**Fix**. Put class-less CSS for a template part in the stylebook (the part is site-wide
+anyway), or wrap it in a local class string so it rides in `dynamicGClasses[].css`. On a
+page target nothing is lost: `compile_css()` includes both.
 
 ---
 
@@ -169,6 +193,21 @@ srcset the theme generated.
 
 **Note**, the WordPress site icon and the theme logo are the usual stragglers; both accept
 WebP. GIF is deliberately left alone because converting drops the animation.
+
+---
+
+## A stylebook change reads back as a no-op, repeatedly
+
+**Symptom** — you push a stylebook update, read the settings back, and the change is not
+there. Push again, same result. The front end may already be correct.
+
+**Cause** — LiteSpeed and similar host caches will serve cached responses for
+**authenticated REST GETs**. Look for `x-litespeed-cache: hit` on the response. Your read-back
+is stale, not your write.
+
+**Fix** — trust the front end over the read-back, add a unique query string to the read, or
+purge before verifying. Do not keep re-pushing: the writes are landing, and repeated
+"fixes" for a phantom failure are how real state gets damaged.
 
 ---
 

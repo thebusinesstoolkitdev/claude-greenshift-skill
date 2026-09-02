@@ -1,135 +1,239 @@
 {
- "_comment": "Starter design system for the Greenshift stylebook. Swap the hex values and font stacks for the brand, keep the structure. Prefix `gt-` can be renamed per project — if you rename it, rename it in the layout classes too. Text tokens (--gt-ink, --gt-muted, --gt-purple, --gt-olive-text, --gt-accent-text) pass WCAG AA (4.5:1) against the surface tokens. --gt-olive and --gt-accent are decorative fills that FAIL as body text on a light surface, which is exactly why the -text variants exist — use those for type. Re-run scripts/check_contrast.py after changing any value.",
+ "_comment": "Starter design system for the Greenshift stylebook. Swap the hex values and font stacks for the brand, keep the structure. Prefix `gt-` can be renamed per project — if you rename it, rename it in the layout classes too. Text tokens (--gt-ink, --gt-muted, --gt-purple, --gt-olive-text, --gt-accent-text) pass WCAG AA (4.5:1) against the surface tokens. --gt-olive and --gt-accent are decorative fills that FAIL as body text on a light surface, which is exactly why the -text variants exist — use those for type. Re-run scripts/check_contrast.py after changing any value. Each variable carries a `kind` (color, font-size, spacing, font-family, custom); `stylebook.py push --theme` uses it to register the token as a theme.json preset and alias the gt- name onto it, and an optional `alias` names an existing theme variable to point at instead.",
  "variables": [
   {
    "name": "Surface Base",
    "variable": "--gt-cream",
-   "variable_value": "#fbf6ec"
+   "variable_value": "#fbf6ec",
+   "label": "gt-cream",
+   "value": "var(--gt-cream)",
+   "group": "imported",
+   "kind": "color"
   },
   {
    "name": "Surface Alt",
    "variable": "--gt-sand",
-   "variable_value": "#f2e8d6"
+   "variable_value": "#f2e8d6",
+   "label": "gt-sand",
+   "value": "var(--gt-sand)",
+   "group": "imported",
+   "kind": "color"
   },
   {
    "name": "Text Primary",
    "variable": "--gt-ink",
-   "variable_value": "#33291f"
+   "variable_value": "#33291f",
+   "label": "gt-ink",
+   "value": "var(--gt-ink)",
+   "group": "imported",
+   "kind": "color"
   },
   {
    "name": "Text Muted",
    "variable": "--gt-muted",
-   "variable_value": "#6e6456"
+   "variable_value": "#6e6456",
+   "label": "gt-muted",
+   "value": "var(--gt-muted)",
+   "group": "imported",
+   "kind": "color"
   },
   {
    "name": "Brand",
    "variable": "--gt-purple",
-   "variable_value": "#7e5aa6"
+   "variable_value": "#7e5aa6",
+   "label": "gt-purple",
+   "value": "var(--gt-purple)",
+   "group": "imported",
+   "kind": "color"
   },
   {
    "name": "Brand Dark",
    "variable": "--gt-purple-dark",
-   "variable_value": "#6a4a8f"
+   "variable_value": "#6a4a8f",
+   "label": "gt-purple-dark",
+   "value": "var(--gt-purple-dark)",
+   "group": "imported",
+   "kind": "color"
   },
   {
    "name": "Secondary",
    "variable": "--gt-olive",
-   "variable_value": "#7c8b54"
+   "variable_value": "#7c8b54",
+   "label": "gt-olive",
+   "value": "var(--gt-olive)",
+   "group": "imported",
+   "kind": "color"
   },
   {
    "name": "Secondary Text",
    "variable": "--gt-olive-text",
-   "variable_value": "#5a663c"
+   "variable_value": "#5a663c",
+   "label": "gt-olive-text",
+   "value": "var(--gt-olive-text)",
+   "group": "imported",
+   "kind": "color"
   },
   {
    "name": "Secondary Deep",
    "variable": "--gt-olive-deep",
-   "variable_value": "#5a663c"
+   "variable_value": "#5a663c",
+   "label": "gt-olive-deep",
+   "value": "var(--gt-olive-deep)",
+   "group": "imported",
+   "kind": "color"
   },
   {
    "name": "Accent",
    "variable": "--gt-accent",
-   "variable_value": "#e27b4b"
+   "variable_value": "#e27b4b",
+   "label": "gt-accent",
+   "value": "var(--gt-accent)",
+   "group": "imported",
+   "kind": "color"
   },
   {
    "name": "Accent Text",
    "variable": "--gt-accent-text",
-   "variable_value": "#a8502a"
+   "variable_value": "#a8502a",
+   "label": "gt-accent-text",
+   "value": "var(--gt-accent-text)",
+   "group": "imported",
+   "kind": "color"
   },
   {
    "name": "Radius",
    "variable": "--gt-radius",
-   "variable_value": "12px"
+   "variable_value": "12px",
+   "label": "gt-radius",
+   "value": "var(--gt-radius)",
+   "group": "imported",
+   "kind": "custom"
   },
   {
    "name": "Radius Large",
    "variable": "--gt-radius-lg",
-   "variable_value": "16px"
+   "variable_value": "16px",
+   "label": "gt-radius-lg",
+   "value": "var(--gt-radius-lg)",
+   "group": "imported",
+   "kind": "custom"
   },
   {
    "name": "Focus Ring",
    "variable": "--gt-focus",
-   "variable_value": "0 0 0 3px rgba(126,90,166,0.45)"
+   "variable_value": "0 0 0 3px rgba(126,90,166,0.45)",
+   "label": "gt-focus",
+   "value": "var(--gt-focus)",
+   "group": "imported",
+   "kind": "custom"
   },
   {
    "name": "Font Heading",
    "variable": "--gt-font-heading",
-   "variable_value": "'Fraunces', Georgia, serif"
+   "variable_value": "'Fraunces', Georgia, serif",
+   "label": "gt-font-heading",
+   "value": "var(--gt-font-heading)",
+   "group": "imported",
+   "kind": "font-family"
   },
   {
    "name": "Font Body",
    "variable": "--gt-font-body",
-   "variable_value": "'Poppins', -apple-system, sans-serif"
+   "variable_value": "'Poppins', -apple-system, sans-serif",
+   "label": "gt-font-body",
+   "value": "var(--gt-font-body)",
+   "group": "imported",
+   "kind": "font-family"
   },
   {
    "name": "H1 Size",
    "variable": "--gt-h1",
-   "variable_value": "clamp(2.5rem, 4.2vw, 3.75rem)"
+   "variable_value": "clamp(2.5rem, 4.2vw, 3.75rem)",
+   "label": "gt-h1",
+   "value": "var(--gt-h1)",
+   "group": "imported",
+   "kind": "font-size"
   },
   {
    "name": "H2 Size",
    "variable": "--gt-h2",
-   "variable_value": "clamp(1.75rem, 2.8vw, 2.5rem)"
+   "variable_value": "clamp(1.75rem, 2.8vw, 2.5rem)",
+   "label": "gt-h2",
+   "value": "var(--gt-h2)",
+   "group": "imported",
+   "kind": "font-size"
   },
   {
    "name": "H3 Size",
    "variable": "--gt-h3",
-   "variable_value": "clamp(1.15rem, 1.6vw, 1.375rem)"
+   "variable_value": "clamp(1.15rem, 1.6vw, 1.375rem)",
+   "label": "gt-h3",
+   "value": "var(--gt-h3)",
+   "group": "imported",
+   "kind": "font-size"
   },
   {
    "name": "Lead Size",
    "variable": "--gt-lead",
-   "variable_value": "1.0625rem"
+   "variable_value": "1.0625rem",
+   "label": "gt-lead",
+   "value": "var(--gt-lead)",
+   "group": "imported",
+   "kind": "font-size"
   },
   {
    "name": "Body Size",
    "variable": "--gt-body",
-   "variable_value": "1rem"
+   "variable_value": "1rem",
+   "label": "gt-body",
+   "value": "var(--gt-body)",
+   "group": "imported",
+   "kind": "font-size"
   },
   {
    "name": "Small Size",
    "variable": "--gt-small",
-   "variable_value": "0.75rem"
+   "variable_value": "0.75rem",
+   "label": "gt-small",
+   "value": "var(--gt-small)",
+   "group": "imported",
+   "kind": "font-size"
   },
   {
    "name": "Section Padding",
    "variable": "--gt-section-pad",
-   "variable_value": "clamp(3rem, 7vw, 5rem)"
+   "variable_value": "clamp(3rem, 7vw, 5rem)",
+   "label": "gt-section-pad",
+   "value": "var(--gt-section-pad)",
+   "group": "imported",
+   "kind": "spacing"
   },
   {
    "name": "Gap",
    "variable": "--gt-gap",
-   "variable_value": "clamp(1rem, 2.5vw, 1.6rem)"
+   "variable_value": "clamp(1rem, 2.5vw, 1.6rem)",
+   "label": "gt-gap",
+   "value": "var(--gt-gap)",
+   "group": "imported",
+   "kind": "spacing"
   },
   {
    "name": "Column Gap",
    "variable": "--gt-col-gap",
-   "variable_value": "clamp(1.5rem, 4vw, 4rem)"
+   "variable_value": "clamp(1.5rem, 4vw, 4rem)",
+   "label": "gt-col-gap",
+   "value": "var(--gt-col-gap)",
+   "group": "imported",
+   "kind": "spacing"
   },
   {
    "name": "Card Padding",
    "variable": "--gt-card-pad",
-   "variable_value": "clamp(1.5rem, 4vw, 3rem) clamp(1.2rem, 3.5vw, 2.5rem)"
+   "variable_value": "clamp(1.5rem, 4vw, 3rem) clamp(1.2rem, 3.5vw, 2.5rem)",
+   "label": "gt-card-pad",
+   "value": "var(--gt-card-pad)",
+   "group": "imported",
+   "kind": "custom"
   }
  ],
  "colours": [

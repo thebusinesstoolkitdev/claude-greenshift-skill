@@ -90,11 +90,21 @@ Rules 1-3 are Greenshift-backend specific. Rule 4 applies to both.
    `blocks.set_target('page')` omits CSSRender, and `blocks.compile_css(markup)` builds the
    string for `WP.set_post_css()`. Default is `template`, correct for the header and footer,
    which are template parts.
-2. **Single-value `styleAttributes` only.** The format is a four-value responsive array,
-   `["desktop","tablet","mobile_landscape","mobile_portrait"]`, with fewer values applying
-   upward. Multi-value arrays pushed over REST were observed dropping the smallest entry so
-   mobile inherited desktop, so this skill sends one value and keeps every breakpoint in a
-   stylebook class. Use `clamp()`/`min()` for fluid values.
+2. **Responsive arrays work over REST; the constraint is who compiles them.**
+   `styleAttributes` values are four-entry arrays,
+   `["desktop","tablet","mobile_landscape","mobile_portrait"]`, fewer entries applying
+   upward. Verified against Greenlight 2.1 / gl-page-builder 3.3.7: every shape (1 to 4
+   entries, `null` or `""` gaps, `gridTemplateColumns`) round-trips intact and the PHP
+   renderer emits `max-width` rules at 991.98px, 767.98px and 575.98px, smallest entry
+   included. An earlier version of this skill banned multi-value arrays on one
+   unreproduced observation; `python scripts/probe_responsive.py` re-runs the check
+   against any site before you trust either claim on a new plugin version.
+
+   What still constrains you: on a page target nothing server-side compiles them, so
+   `blocks.compile_css()` does, mirroring those breakpoints. On the core backend there are
+   no per-block breakpoints at all, so a multi-value array raises and the breakpoint goes
+   in a stylebook class. Shared layout (grids, footer columns) stays in a stylebook class
+   because it is shared, not because arrays are unsafe.
 3. **Every HTML attribute must be reachable from the block JSON.** Not just `data-*`,
    `aria-*` and `role`: `fetchpriority`, `decoding`, `type` and anything else you write
    into the tag has to appear in `dynamicAttributes` too. Greenshift renders `class`,
@@ -231,6 +241,29 @@ fluid type/spacing tokens; button, eyebrow, card, form and screen-reader classes
 layout classes below. Rename the `gt-` prefix per project if you like, just rename it
 consistently.
 
+**Register the tokens with the theme, not beside it.** Upstream prefers the theme's own
+`--wp--preset--*` and `--wp--custom--*` variables to a parallel token set, because two
+systems drift. `push --theme` does both: every variable carries a `kind` (`color`,
+`font-size`, `spacing`, `font-family`, `custom`) and is written as a theme.json preset of
+that kind on the user global-styles record, then the stylebook variable is rewritten to
+alias it, `--gt-purple: var(--wp--preset--color--gt-purple)`. Generators keep the `gt-`
+names; the theme owns the values, the site editor shows them, and core blocks can pick
+them from the preset pickers. A token that already exists in the theme under another name
+gets an `alias` instead of a new preset; `stylebook.py map --apply` fills those in wherever
+the values match.
+
+```
+python scripts/stylebook.py map  reference/starter-tokens.json --apply   # reuse theme presets
+python scripts/stylebook.py push reference/starter-tokens.json --theme   # presets + aliased stylebook
+python scripts/stylebook.py remove reference/starter-tokens.json         # retire the lot
+```
+
+Two things WordPress does on the way that will bite a hand-written alias: preset slugs and
+`settings.custom` keys are kebab-cased before the variable is emitted, so `gt-h1` is
+`--wp--preset--font-size--gt-h-1`, and each of `settings` and `styles` on the record is
+replaced whole on write. `stylebook.py` mirrors both; `verify` reports any alias whose
+target the page never defines.
+
 Layout classes hold every breakpoint: `gt-grid-2` `gt-grid-3` `gt-grid-4` `gt-grid-even`
 `gt-grid-split` `gt-footer-grid` `gt-form-row` `gt-section` `gt-container`.
 
@@ -304,11 +337,74 @@ reserve space.
 `prep_images.py audit` and `verify.py --all` both fail on a non-WebP raster image, so this
 stays enforced after handover rather than only at build time.
 
+## The documented section shell
+
+A full-width section with centred content has a prescribed structure. `section()` and
+`container()` emit it:
+
+```html
+<section class="wp-section alignfull" data-type="section-component">
+  <div class="wp-content-wrap" data-type="content-area-component">…</div>
+</section>
+```
+
+Keep the `alignfull` class, `var(--wp--style--global--wide-size, 1200px)` for the inner
+width, and `var(--wp--spacing--side, min(3vw, 20px))` for side padding. Padding top and
+bottom are yours; those three are not. Inventing your own section class instead is what
+produces inter-section seams and a width that disagrees with the theme.
+
+## Where a page's CSS lives
+
+Three mechanisms, and picking the wrong one is the most common way to ship an unstyled page.
+
+| Scope | Mechanism |
+|---|---|
+| site-wide tokens and shared classes | the stylebook (`global_settings`), or the FSE global-styles record on the core backend |
+| one page's own classes | a **stylemanager** block: `style_manager(seed, classes={'home-hero': '.home-hero{…}'})`, emitting `isVariation:"stylemanager"` with `dynamicGClasses` in the converter's shape |
+| a page's compiled block styles | `_gspb_post_css`, written by `WP.set_post_css()` from `compile_css()`, which folds the stylemanager's CSS in too |
+
+What the PHP renderer behind `CSSRender` actually emits, probed on a live install: plain
+`styleAttributes` properties (responsive arrays included), `dynamicGClasses[].css` and
+`dynamicGClasses[].selectors[].css`. Nothing else. `customCss` on a stylemanager and
+`customCSS_Extra` anywhere are compiled by the editor's JavaScript only, so on a template
+target they never reach the page; `style_manager()` refuses `custom_css` there and
+`check_blocks.py` flags both. A template part's class-less CSS belongs in the stylebook,
+which is site-wide like the part itself. On a page target `compile_css()` includes them,
+matching what an editor save would have written.
+
+**Never add CSSRender to a block you did not author.** The theme's own blocks ship
+`styleAttributes` next to already-compiled `inlineCssStyles`. Adding CSSRender re-emits the
+raw values, which override the compiled rules. Doing this to a Greenlight header turns the
+hidden mobile panel into a fixed full-height overlay across the whole site. The rule
+"CSSRender on anything with styleAttributes" applies to your blocks only.
+
+**`update_page()` clears `_gspb_post_css` by default.** That is correct on the CSSRender
+path and destructive on the page path, where the field *is* the stylesheet. Pass
+`clear_css=False` when you are about to call `set_post_css()`.
+
 ## Generating pages
 
 Use `scripts/blocks.py`, `block()`, `image()`, `svg_icon()`, `section()`, `container()`,
-`grid()`, `button()`, `heading()`, `eyebrow()`, `raw_html()`, `shortcode()`. See
-`examples/` for two complete generators.
+`grid()`, `button()`, `heading()`, `eyebrow()`, `style_manager()`, `raw_html()`,
+`shortcode()`. See `examples/` for two complete generators.
+
+**One finished HTML file in hand? Use upstream's converter instead.** Hand-emitting from
+Python suits many pages built from structured data. For a single design that already
+exists as clean HTML, WPsoul's `convert.js` maps every element, files the `<style>` into a
+stylemanager block, and `deconvert.js` brings it back for editing. `scripts/convert_html.py`
+wraps it with this skill's delivery contract:
+
+```
+python scripts/convert_html.py input/home.html -o output/home.html --target page
+python scripts/convert_html.py input/home.html --target page --publish "Home" --slug home
+python scripts/convert_html.py input/promo.html -o output/promo.html --target template
+```
+
+It escapes `--` in the block JSON, sets `CSSRender` per target, compiles the page CSS (or
+ships the original stylesheet with `--raw-css`), runs `check_blocks.py`, and reports what
+the converter changed: a rule is filed under the first class in its selector and the
+compound before it is dropped (`body.dark .title` becomes `.dark .title`), and a rule with
+no class at all lands in `customCss`, which never renders on a template target.
 
 - Block ids: `gsbp-` + 7 chars, deterministic from a seed; `localId` identical; the id must
   appear in the HTML `class`.
@@ -319,6 +415,16 @@ Use `scripts/blocks.py`, `block()`, `image()`, `svg_icon()`, `section()`, `conta
   styles. One `h1` per page, `h2` per section, `h3` for cards, and **never skip a level**, a section of `h3` cards needs an `h2` above it, visually hidden (`gt-sr-only`) if the
   design has no visible heading there.
 - Eyebrows are `div`s, not headings. Content cards are `article`.
+- `className` goes in the block JSON **and** the HTML `class` attribute. `blocks.py` does
+  both; hand-written markup that only sets one will not survive an editor round trip.
+- `type`, `name`, `placeholder` and `required` on a form control belong in
+  `formAttributes`, not in the main JSON and not in `dynamicAttributes`.
+- Class and id prefixes are **four characters minimum**. This skill's own `gt-` predates
+  that rule; pick a real project prefix (`ketup-`, `booz-`) for anything page-specific.
+- No `:root` variables and no styles on `body` or `*` in page CSS. Variables belong on a
+  parent block's class. The stylebook is the exception and a deliberate one: it is the
+  global layer, and `global-settings.md` expects `:root`-style declarations to be extracted
+  into it rather than left in the page.
 
 **Raw HTML is a last resort, not a shortcut.** `raw_html()` exists for scripts, JSON-LD,
 stylesheets and shortcodes. It raises if you hand it content-shaped markup, because content
@@ -350,13 +456,24 @@ the slug in `GET /wp/v2/templates`. After any content update clear stale editor 
 
 ## Header and footer (FSE template parts)
 
-`GET|POST /wp/v2/template-parts/{theme}//header` and `//footer`, payload `{"content"}`.
+`GET|POST /wp/v2/template-parts/{theme}//{slug}`, payload `{"content"}`. Do not assume the
+slugs: `WP.get_template_part(area='header')` reads `GET /wp/v2/template-parts`, picks the
+part whose `area` matches (a customised copy over the theme file), and works on any FSE
+theme. `WP.set_template_part(area='footer', content=…)` writes the same way.
 
-**Header: edit surgically, never rewrite.** Greenlight's header contains working Greenshift
-navigation machinery, hamburger trigger, sliding mobile panel, menu-copy areas, generated
-control ids (`gs_menu_XXXX`). Download the raw content and patch it: prepend a topbar, swap
-the placeholder `<li>` items inside the menu `<ul>`, replace the demo CTA, restyle the
-wrapper group. The mobile panel copies the desktop menu at runtime, leave it alone.
+Which of the two treatments a header gets is decided by what is in it, not by the theme's
+name: `blocks.has_greenshift_blocks(raw)`.
+
+**A Greenshift header: edit surgically, never rewrite.** Greenlight's header contains working
+Greenshift navigation machinery, hamburger trigger, sliding mobile panel, menu-copy areas,
+generated control ids (`gs_menu_XXXX`). Download the raw content and patch it: prepend a
+topbar, swap the placeholder `<li>` items inside the menu `<ul>`, replace the demo CTA,
+restyle the wrapper group. The mobile panel copies the desktop menu at runtime, leave it
+alone.
+
+**Any other header** (core navigation block, another theme) has no machinery to protect.
+Rewrite it like the footer, keeping the theme's `wp:navigation` block by `ref` so menus stay
+editable in Appearance → Editor.
 
 The theme's hamburger ships without an accessible name. Add `aria-label`, `aria-controls`
 and `aria-expanded`, plus a small delegated script that flips `aria-expanded` and the label
@@ -367,9 +484,25 @@ when it toggles. `examples/generate_chrome.py` shows the exact patches.
 
 ## Interactivity
 
-Ship behaviour as a `core/html` script block using **event delegation on `document`** so it
-survives re-saves and reordering. The editor canvas never runs these scripts, test on the
-front end only.
+Greenshift reads frontend scripts from the `gspb_block_js` option, not from post content.
+The editor writes that option on save, so a block inserted over REST carries `customJs`
+that never runs. Upstream gives three ways to deal with it, in preference order:
+
+| | How | Cost |
+|---|---|---|
+| A | WP-CLI `wp option update gspb_block_js` | needs shell access to the host |
+| B | `POST greenshift/v1/update-custom-js`, `WP.set_block_js()` | needs `manage_options` |
+| C | put the script in a `wp:html` block at the end of the page | none |
+
+**This skill uses C by default**, which is a documented fallback rather than a workaround:
+it needs no extra capability and survives hosts that block the endpoint. Strip `customJs`
+and `customJsEnabled` from the block when you do, or the script is defined twice. On this
+path you **must** replace `{{PLUGIN_URL}}` with the real plugin path, because raw `wp:html`
+output is never processed by PHP. Options A and B keep the placeholder, which PHP resolves
+at render time.
+
+Whichever route, use **event delegation on `document`** so behaviour survives re-saves and
+reordering, and test on the front end: the editor canvas never runs these scripts.
 
 To show/hide, set `el.style.display`. **Never use the `hidden` attribute**: block CSS with
 `display:flex` beats `[hidden]`, so elements report themselves hidden while staying visible.
@@ -435,13 +568,21 @@ Save to flush rewrite rules (without it the sitemap 404s).
 
 1. `python scripts/verify.py --all`, heading outline, image alt and dimensions, accessible
    names, block CSS presence, undefined tokens.
-2. `python scripts/check_links.py`, internal links, in-page anchors, links to drafts, and
+2. `python scripts/check_blocks.py output/*.html` — audits generated markup **before** it
+   is pushed: undeclared attributes, raw `id` instead of `anchor`, missing `type`,
+   id/localId mismatch, CSSRender against the target. None of this is visible on a
+   rendered page, which is why it has shipped broken more than once.
+3. `python scripts/check_links.py`, internal links, in-page anchors, links to drafts, and
    whether the main nav is identical across pages. `verify.py` reads one page at a time and
    never follows a link, so every cross-page link defect survives it.
-3. `python scripts/stylebook.py verify`, tokens and classes actually reach the browser.
-4. Browser at 375px, grids collapse, footer stacks, no horizontal overflow
+4. `python scripts/stylebook.py verify`, tokens and classes actually reach the browser, and
+   no aliased token points at a preset the page never defines.
+5. `python scripts/probe_responsive.py --parity` on a plugin version you have not built on
+   before: responsive arrays, stylemanager classes and `compile_css()` parity, against the
+   live renderer. Every rule in this file that starts "verified" was verified by it.
+6. Browser at 375px, grids collapse, footer stacks, no horizontal overflow
    (`document.documentElement.scrollWidth <= innerWidth`).
-5. Front-end click-through of anything interactive.
+7. Front-end click-through of anything interactive.
 
 Two habits worth keeping: **verify what the user sees**, not what a DOM property claims; and
 when a check disagrees with manual inspection, **suspect the check**, print the values it
@@ -456,10 +597,13 @@ while testing and purge before a handover.
 
 1. `.env`, auth check, confirm what the host already provides
 2. Extract the design → section map → approval
-3. Contrast gate the palette → push the stylebook
+3. Contrast gate the palette → push the stylebook (`--theme` registers the tokens as theme
+   presets and aliases the stylebook onto them)
 4. Images: export → `prep_images.py build` (WebP) → `upload`, logo + alt text
 5. Generate and push pages as drafts
-6. Header surgical patch, footer rewrite
-7. `verify.py --all`, `check_links.py`, then the browser at 375px
+6. Header: discover with `area='header'`, patch surgically if it carries Greenshift
+   blocks, otherwise rewrite; footer rewrite
+7. `check_blocks.py` on the output, then push; `verify.py --all` and
+   `check_links.py` on the live pages, then the browser at 375px
 8. Launch stack: plugins, form, emails, SEO, llms.txt
 9. Work `reference/launch-checklist.md` and hand over the manual steps

@@ -14,8 +14,8 @@ pass, takes about an hour end to end.
 - **The pipeline**, read a design, export and optimise its images, push a token-based
   design system, generate blocks, create pages, patch the theme's header and footer.
 - **The API behaviour that is not documented**, the `CSSRender` string-versus-boolean
-  and pages-versus-templates contract, Gutenberg's attribute-validation trap, Fluent Forms'
-  duplicate settings rows, Rank Math's REST gap. Each one cost hours to find; see
+  and pages-versus-templates contract, Gutenberg's attribute-validation trap, Gravity Forms'
+  whole-object PUT, Rank Math's REST gap. Each one cost hours to find; see
   [`reference/troubleshooting.md`](reference/troubleshooting.md).
 - **Working tools**, a REST client, a block builder, a WCAG contrast gate, a stylebook
   installer, a live-page verifier, and launch automation.
@@ -54,7 +54,7 @@ python scripts/check_links.py
 ```
 SKILL.md                      the skill itself: pipeline, rules, gotchas
 scripts/
-  wp_api.py                   WordPress / Greenshift / Fluent Forms REST client
+  wp_api.py                   WordPress / Greenshift / Gravity Forms REST client
   blocks.py                   block builder: core or greenshift backend, same calls
   stylebook.py                push and verify the design system; --theme registers tokens as presets
   probe_responsive.py         what the live renderer actually emits, before you trust a rule

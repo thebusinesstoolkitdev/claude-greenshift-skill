@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Thin WordPress / Greenshift / Fluent Forms REST client.
+Thin WordPress / Greenshift / Gravity Forms REST client.
 
 Reads credentials from environment or a .env file in the current working directory:
 
@@ -116,7 +116,7 @@ class WP:
             parsed = json.loads(body)
         except json.JSONDecodeError:
             return body
-        # Several Greenshift/Fluent endpoints return a JSON-encoded *string*.
+        # Several Greenshift endpoints return a JSON-encoded *string*.
         return json.loads(parsed) if isinstance(parsed, str) else parsed
 
     def get(self, route):
@@ -143,7 +143,7 @@ class WP:
             'roles': me.get('roles'),
             'is_admin': 'administrator' in me.get('roles', []),
             'greenshift': 'greenshift/v1' in namespaces,
-            'fluentform': 'fluentform/v1' in namespaces,
+            'gravityforms': self.gf_state(namespaces),
             'namespaces': namespaces,
         }
 
@@ -413,27 +413,55 @@ class WP:
             entry = self.post('wp/v2/plugins/' + entry['plugin'], {'status': 'active'})
         return entry
 
-    # ---------- Fluent Forms ----------
+    # ---------- Gravity Forms (REST API v2) ----------
+    #
+    # Licensed plugin, not on wordpress.org: upload once, enter the licence, and
+    # enable the API under Forms -> Settings -> REST API. Application passwords
+    # authenticate; the user's Gravity Forms capabilities are honoured. Forms are
+    # whole objects: fields, notifications and confirmations travel together, and
+    # PUT replaces the object, so read, edit, write back.
 
-    def ff_forms(self):
-        """All Fluent Forms. The endpoint returns a paginated envelope
-        ({current_page, per_page, data: [...]}), not a bare list, so iterating the
-        response directly raises TypeError: string indices must be integers."""
-        data = self.get('fluentform/v1/forms')
-        return data.get('data', []) if isinstance(data, dict) else data
+    def gf_state(self, namespaces=None):
+        """'ready', 'disabled' (plugin active, REST switched off), or 'missing'."""
+        if namespaces is None:
+            namespaces = self.get('').get('namespaces', [])
+        if 'gf/v2' not in namespaces:
+            return 'missing'
+        try:
+            self.get('gf/v2/forms')
+        except WPError as exc:
+            if exc.status in (401, 403):
+                return 'disabled'
+            raise
+        return 'ready'
 
-    def ff_settings(self, form_id, meta_key):
-        return self.get(f'fluentform/v1/settings/{form_id}?meta_key={meta_key}')
+    def gf_forms(self):
+        """Every form as a list of {id, title, entries}. The endpoint answers with an
+        object keyed by form id; this flattens it."""
+        data = self.get('gf/v2/forms')
+        if isinstance(data, dict):
+            return [v if isinstance(v, dict) else {'id': k} for k, v in data.items()]
+        return data or []
 
-    def ff_save_setting(self, form_id, meta_key, value, meta_id=None):
-        """
-        Save a form setting.
+    def gf_form(self, form_id):
+        return self.get(f'gf/v2/forms/{form_id}')
 
-        CRITICAL: pass meta_id to UPDATE an existing row. Without it Fluent Forms
-        INSERTS a duplicate row, and duplicate settings rows produce unpredictable
-        behaviour (e.g. two notifications, or the old confirmation still winning).
-        """
-        payload = {'meta_key': meta_key, 'value': json.dumps(value)}
-        if meta_id is not None:
-            payload['meta_id'] = meta_id
-        return self.post(f'fluentform/v1/settings/{form_id}', payload)
+    def gf_create_form(self, form):
+        return self.post('gf/v2/forms', form)
+
+    def gf_update_form(self, form_id, form):
+        """Replace the whole form object. Pass what gf_form() returned, edited."""
+        return self.request(f'gf/v2/forms/{form_id}', form, method='PUT')
+
+    def gf_delete_form(self, form_id, force=False):
+        """Trash a form; force=True deletes it permanently."""
+        return self.delete(f'gf/v2/forms/{form_id}' + ('?force=true' if force else ''))
+
+    def gf_entries(self, form_id, page_size=20):
+        return self.get(f'gf/v2/forms/{form_id}/entries?paging[page_size]={page_size}')
+
+    def gf_submit(self, form_id, values):
+        """Submit values ({field_id: value}) as a real submission. This creates an
+        entry and fires notifications, so it is a live test, not a probe."""
+        payload = {f'input_{k}': v for k, v in values.items()}
+        return self.post(f'gf/v2/forms/{form_id}/submissions', payload)

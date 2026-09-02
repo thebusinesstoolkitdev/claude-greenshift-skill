@@ -545,24 +545,32 @@ Treat these as build requirements, not a later pass:
 
 ## Launch stack
 
-`python scripts/launch.py plugins` installs Fluent Forms, FluentSMTP and Rank Math. Large
-plugins often return HTTP 500 on install while the files land fine, re-read
-`GET /wp/v2/plugins` and activate what is present rather than trusting the response.
+`python scripts/launch.py plugins` installs FluentSMTP and Rank Math from wordpress.org
+and reports the state of Gravity Forms. Large plugins often return HTTP 500 on install
+while the files land fine, re-read `GET /wp/v2/plugins` and activate what is present
+rather than trusting the response.
 
-**Forms**, `POST /fluentform/v1/forms` rejects payloads without one of its own template
-keys, so duplicate the bundled demo form and overwrite its fields
-(`python scripts/launch.py form "<Business>"`). Embed with the `[fluentform id="N"]`
-shortcode inside a container carrying `gt-form-card` to inherit brand styling.
+**Forms are Gravity Forms, over its REST API v2** (`gf/v2`). It is licensed and not on
+wordpress.org, so three steps stay manual, once per site: upload the zip, enter the
+licence, and switch on Forms → Settings → REST API. Application passwords authenticate
+and the user's Gravity Forms capabilities apply, so build as an administrator.
+`python scripts/launch.py check` proves the path (create, read, update, delete a probe
+form, no email sent) before you build on it.
 
-**Fields are writable, but only under the right key.** `formFields` works. `form_fields`
-is accepted, returns success, and changes nothing, which reads exactly like the API
-refusing field writes. It is not refusing. `fluentform/v1/forms` also returns a paginated
-envelope (`{current_page, per_page, data:[…]}`), so iterating the response as a list
-raises `TypeError: string indices must be integers`. `WP.ff_forms()` unwraps it.
+`python scripts/launch.py form "<Business>"` creates the form in one `POST /gf/v2/forms`:
+fields with integer ids, a default confirmation, an admin notification. Each field's
+`adminLabel` carries its machine name (`name`, `email`, `message`) so later steps find
+ids without guessing. Embed with `blocks.gravity_form(id)`, a real `wp:gravityforms/form`
+block the client can reconfigure, inside a container carrying `gt-form-card`; the
+shortcode `[gravityform id="N" title="false" description="false" ajax="true"]` is the
+fallback for raw HTML.
 
-**Form settings are the classic footgun**: `POST /fluentform/v1/settings/{id}` *inserts* a
-new row unless you pass `meta_id`. Duplicated rows mean duplicate emails or a confirmation
-that will not change. Read first, pass the row id back.
+**The form is one object.** Notifications and confirmations live on it, keyed by a
+13-character id, and `PUT /gf/v2/forms/{id}` replaces the whole thing. Read, edit the two
+dicts, write back; never POST a second form to change one. `launch.py` derives those ids
+from the names, so a re-run updates in place instead of adding duplicates. Merge tags bind
+by field id, `{Name:1}` not by label; `{admin_email}` and `{all_fields}` are built in. A
+notification to the submitter is `toType:"field"` with `to` set to the email field's id.
 
 `python scripts/launch.py emails <form_id> <address>` brands the on-page confirmation, the
 admin notification (Reply-To set to the sender so replies just work) and a client

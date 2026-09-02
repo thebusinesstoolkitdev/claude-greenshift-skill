@@ -289,7 +289,7 @@ left = block(s + 'left', 'div', inner=
     info_row(s + 'ir4', 'gt-icon-garland.png', 'Hours', ['Mon – Sat · 10am – 6pm', 'Sunday · Closed']),
     style={"display": ["flex"], "flexDirection": ["column"], "alignItems": ["flex-start"]}, name='Contact Info')
 
-form_html = rawhtml('[fluentform id="3"]')
+form_html = rawhtml('[gravityform id="3" title="false" description="false" ajax="true"]')
 
 right = block(s + 'right', 'div', inner=
     block(s + 'rh2', 'h2', text='Send us a message', style={"marginTop": ["0px"], "marginBottom": ["0.4rem"]}) +

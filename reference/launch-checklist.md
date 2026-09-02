@@ -53,10 +53,12 @@ done over the REST API, do those in wp-admin and tick them off explicitly.
 ## 5. Launch stack
 
 - [ ] `python scripts/launch.py plugins`
+- [ ] **manual** Gravity Forms: upload the zip, enter the licence, Forms → Settings → REST API → enable
+- [ ] `python scripts/launch.py check` passes (create/read/update/delete a probe form)
 - [ ] **manual** Rank Math setup wizard
 - [ ] **manual** Settings → Permalinks → Save (flushes rules; sitemap 404s without it)
 - [ ] **manual** FluentSMTP provider connected and authenticated
-- [ ] `python scripts/launch.py form "<Business>"` → embed the shortcode
+- [ ] `python scripts/launch.py form "<Business>"` → embed with `blocks.gravity_form(id)`
 - [ ] `python scripts/launch.py emails <form_id> <to@address>`
 - [ ] **manual** Real test submission: on-page confirmation, admin email, client auto-reply
 - [ ] Mailbox for the notification address actually exists

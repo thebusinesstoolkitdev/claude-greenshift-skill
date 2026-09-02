@@ -337,25 +337,28 @@ array you send for `variables` or `global_classes` **replaces** the stored one.
 
 ---
 
-## Fluent Forms: duplicate notifications, or settings changes that do not stick
+## Gravity Forms: 401 or 403 on every `gf/v2` call
 
-**Cause**, `POST /fluentform/v1/settings/{form_id}` **inserts a new row** unless you pass
-`meta_id`. A second `notifications` row means two emails; a second `formSettings` row means
-the old confirmation may still win.
+**Cause**. The plugin is active (the `gf/v2` namespace is listed) but its REST API is off,
+which is the default. Application-password auth is fine; the plugin refuses before
+looking at it.
 
-**Fix**. Read the setting first, pass the row's `id` back as `meta_id`:
+**Fix**. Forms → Settings → REST API → Enable access to the API. `WP.gf_state()` returns
+`disabled` for exactly this case and `missing` when the plugin is not installed at all.
+Gravity Forms is licensed and not on wordpress.org, so `install_plugin()` cannot fetch it.
 
-```python
-row = wp.ff_settings(form_id, 'formSettings')[0]
-wp.ff_save_setting(form_id, 'formSettings', updated_value, meta_id=row['id'])
-```
+---
 
-Delete an accidental duplicate with `DELETE /fluentform/v1/settings/{form_id}` and
-`{"meta_id": <id>}`.
+## Gravity Forms: a notification was added instead of updated, or one vanished
 
-Also note `POST /fluentform/v1/forms` rejects payloads without one of its own template keys
-("The selected template couldn't be found"), duplicate the bundled demo form instead, then
-overwrite its fields.
+**Cause**. `notifications` and `confirmations` are dicts on the form object keyed by a
+13-character id, and `PUT /gf/v2/forms/{id}` replaces the whole form. Sending a new id adds
+a notification; sending the form without the key drops every notification it held.
+
+**Fix**. Read with `gf_form()`, edit the dicts in place, write back with `gf_update_form()`.
+`launch.py` derives ids from the notification names (`stable_id()`), so its re-runs update
+the same objects. Merge tags bind by field id (`{Email:3}`), so build them from the form
+you read back, not from the order you think you created the fields in.
 
 ---
 

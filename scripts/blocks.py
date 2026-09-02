@@ -591,8 +591,16 @@ def raw_html(content, reason=None):
 
 
 def shortcode(code):
-    """Embed a shortcode, e.g. shortcode('[fluentform id="3"]')."""
+    """Embed a shortcode, e.g. shortcode('[gravityform id="3" title="false" ajax="true"]')."""
     return raw_html(code, reason='shortcode')
+
+
+def gravity_form(form_id, title=False, description=False, ajax=True):
+    """Embed a Gravity Forms form as its own block, which the editor renders and
+    the client can reconfigure, rather than as an opaque shortcode."""
+    attrs = {'formId': str(form_id), 'title': bool(title), 'description': bool(description),
+             'ajax': bool(ajax)}
+    return '<!-- wp:gravityforms/form %s /-->\n' % json.dumps(attrs, separators=(',', ':'))
 
 
 # --------------------------------------------------------------------------

@@ -40,8 +40,7 @@ def audit(path, target='template'):
     problems = []
 
     # self-closing blocks (<!-- wp:site-logo /-->) open nothing
-    opens = len(re.findall(r'<!-- wp:', src)) - len(re.findall(r'<!-- wp:[^
-]*?/-->', src))
+    opens = len(re.findall(r'<!-- wp:', src)) - len(re.findall(r'<!-- wp:[^\n]*?/-->', src))
     closes = len(re.findall(r'<!-- /wp:', src))
     if opens != closes:
         problems.append('block comments unbalanced: %d open, %d close' % (opens, closes))
@@ -59,7 +58,11 @@ def audit(path, target='template'):
             continue
 
         bid = attrs.get('id', '?')
-        if 'type' not in attrs:
+        # upstream's converter emits <svg> as an icon block: tag "svg", the whole
+        # markup under icon.icon.svgRaw, no `type`. Its attributes are declared
+        # by that key, so the checks below do not apply to it.
+        is_icon = attrs.get('tag') == 'svg' and 'icon' in attrs
+        if 'type' not in attrs and not is_icon:
             problems.append('%s: no `type` (text/inner/no); deconvert reads it as inner '
                             'and a text block loses its textContent' % bid)
         if attrs.get('localId') and attrs['localId'] != bid:
@@ -76,7 +79,7 @@ def audit(path, target='template'):
         # name, placeholder and required are specified
         declared = {d.get('name') for d in attrs.get('dynamicAttributes') or []}
         declared |= set(attrs.get('formAttributes') or {})
-        for name, value in html_attrs.items():
+        for name, value in (html_attrs.items() if not is_icon else ()):
             low = name.lower()
             if low == 'id':
                 if attrs.get('anchor') != value:

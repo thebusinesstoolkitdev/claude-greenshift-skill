@@ -51,6 +51,35 @@ gl-page-builder 3.3.7, `["1fr 1fr 1fr", "1fr 1fr", "1fr"]` compiles to a desktop
 
 ---
 
+## A class has a mobile media query, the element ignores it
+
+_Greenshift backend, converter output especially._
+
+**Symptom**. `.site-footer{flex-direction:column}` with `@media(min-width:900px){…row}` in
+a local class, yet the footer stays a row at 375px and squeezes into two columns.
+
+**Cause**. The same block also carries `styleAttributes` (`display`, `flexDirection`,
+`alignItems`) that the converter lifted off the element's inline style or that an editor
+save wrote back. The compiled id rule `.gsbp-xxx{flex-direction:row}` has the same
+specificity as the class rule and prints after it, so the class's media query never wins.
+
+**Fix**. Layout belongs in one place. Drop the per-block `styleAttributes` and any
+`inlineCssStyles` for properties the class already sets, or express the breakpoint in the
+block's own responsive array. `verify.py` cannot see this; a viewport sweep with
+`getComputedStyle(el).flexDirection` at each width does.
+
+---
+
+## Pseudo-element rules in a local class do nothing
+
+The renderer emits `dynamicGClasses[].css` verbatim, but a rule carrying `content:""`
+arrived on the page as `content:none`. Whether the quotes are lost in the block JSON round
+trip or the plugin sanitises `content`, the result is the same: build hit areas and
+decorations without `::before`/`::after`. A transparent border with a negative margin and
+`box-sizing:content-box` enlarges a tap target without moving what is inside it.
+
+---
+
 ## CSS in a stylemanager block reaches the editor but not the front end
 
 _Greenshift backend, template parts / templates / patterns._

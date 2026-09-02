@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # EXAMPLE — a real four-page build, with the client details swapped out.
 # Copy into your project and adapt. The reusable primitives live in
-# scripts/gsblocks.py; this file shows how a whole page is assembled.
+# scripts/blocks.py; this file shows how a whole page is assembled.
 """Generate Greenshift block markup for About / Collection / Contact pages."""
 import json, hashlib, io, sys, os
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
@@ -62,6 +62,9 @@ def img(seed, src, alt, w, h, style):
             f'<img class="{i}" src="{src}" alt="{alt}" width="{w}" height="{h}" loading="lazy"/>\n'
             f'<!-- /wp:greenshift-blocks/element -->\n')
 
+# Scripts, JSON-LD and shortcodes only. Page content goes in element blocks:
+# core/html is uneditable in the block editor, ignores the stylebook, and is
+# skipped by every check. scripts/blocks.py raw_html() enforces this.
 def rawhtml(content):
     return f'<!-- wp:html -->\n{content}\n<!-- /wp:html -->\n'
 

@@ -8,7 +8,7 @@ Launch stack: install plugins, build a branded contact form, wire notifications.
     python launch.py seo                      # stage meta descriptions from page content
 
 The plugin set is deliberately small. Anything the host already provides (caching,
-security, backups on managed WordPress) is not duplicated here — check the host panel
+security, backups on managed WordPress) is not duplicated here, check the host panel
 before adding a caching or security plugin.
 """
 import json
@@ -18,9 +18,9 @@ sys.path.insert(0, __file__.rsplit('\\', 1)[0].rsplit('/', 1)[0])
 from wp_api import WP, WPError  # noqa: E402
 
 PLUGINS = [
-    ('fluentform', 'Fluent Forms — contact forms'),
-    ('fluent-smtp', 'FluentSMTP — reliable delivery, free'),
-    ('seo-by-rank-math', 'Rank Math — sitemap, schema, meta'),
+    ('fluentform', 'Fluent Forms, contact forms'),
+    ('fluent-smtp', 'FluentSMTP, reliable delivery, free'),
+    ('seo-by-rank-math', 'Rank Math, sitemap, schema, meta'),
 ]
 
 
@@ -36,7 +36,7 @@ def plugins():
         entry = wp.install_plugin(slug, activate=True)
         print(f'  + {slug} -> {entry["status"]}   ({why})')
     print('\nManual steps that cannot be scripted:')
-    print('  1. Rank Math setup wizard (wp-admin -> Rank Math) — nothing is output until it runs')
+    print('  1. Rank Math setup wizard (wp-admin -> Rank Math), no meta is output until it runs')
     print('  2. Settings -> Permalinks -> Save, to flush rewrite rules for the sitemap')
     print('  3. FluentSMTP -> choose a sending provider and authenticate')
 
@@ -98,7 +98,7 @@ def form(title='Contact form', fields=DEFAULT_FIELDS, submit_text='Send Message'
     existing = wp.ff_forms()
     demo = next((f for f in existing if f['title'] == 'Contact Form Demo'), None)
     if demo is None:
-        raise SystemExit('No "Contact Form Demo" to duplicate — is Fluent Forms freshly installed?')
+        raise SystemExit('No "Contact Form Demo" to duplicate, is Fluent Forms freshly installed?')
 
     dup = wp.post(f'fluentform/v1/forms/{demo["id"]}/duplicate', {})
     form_id = dup['form_id']
@@ -122,7 +122,11 @@ def form(title='Contact form', fields=DEFAULT_FIELDS, submit_text='Send Message'
             'editor_options': {'title': 'Submit Button'},
         },
     }
-    wp.post(f'fluentform/v1/forms/{form_id}', {'title': title, 'form_fields': json.dumps(payload)})
+    # The writable key is `formFields`. `form_fields` is accepted, returns
+    # success, and silently changes nothing, which reads exactly like the API
+    # rejecting field writes. It does not: this works.
+    wp.post(f'fluentform/v1/forms/{form_id}',
+            {'title': title, 'formFields': json.dumps(payload)})
     print(f'form {form_id} created: {title}')
     print(f'embed with:  [fluentform id="{form_id}"]')
     print('wrap the embed in a container with the gt-form-card class to inherit brand styling')
@@ -156,10 +160,10 @@ def emails(form_id, to_address, business='Our Shop', logo_url='', address='', ho
         '<div style="text-align:center;padding:0.5rem 0">'
         '<div style="font-size:26px;line-height:1.2;margin-bottom:8px;'
         'font-family:var(--gt-font-heading,Georgia,serif);color:var(--gt-ink,#33291f);'
-        'font-weight:600">Thank you — message received</div>'
+        'font-weight:600">Thank you, message received</div>'
         '<div style="color:var(--gt-muted,#6e6456);font-size:15px">We will get back to you '
         f'within a day or two.{f" Need us sooner? Call {phone}." if phone else ""}</div></div>')
-    # meta_id is REQUIRED to update in place — without it Fluent Forms inserts a duplicate row
+    # meta_id is REQUIRED to update in place, without it Fluent Forms inserts a duplicate row
     wp.ff_save_setting(form_id, 'formSettings', form_settings, meta_id=row['id'])
     print('confirmation message updated')
 
@@ -197,7 +201,7 @@ def emails(form_id, to_address, business='Our Shop', logo_url='', address='', ho
         '<p style="font-family:Arial,sans-serif;font-size:14px;color:#33291f;line-height:1.6;'
         'margin:0 0 16px">Hi {inputs.name},</p>'
         '<p style="font-family:Arial,sans-serif;font-size:14px;color:#33291f;line-height:1.6;'
-        f'margin:0 0 16px">Thanks for reaching out to {business} — your note landed safely and '
+        f'margin:0 0 16px">Thanks for reaching out to {business}, your note landed safely and '
         'we will get back to you within a day or two.</p>'
         '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
         'style="background-color:#f2e8d6;border-radius:12px;padding:8px;margin:0 0 20px">'
@@ -224,8 +228,8 @@ def emails(form_id, to_address, business='Our Shop', logo_url='', address='', ho
         'name': 'Client Confirmation',
         'sendTo': {'type': 'field', 'email': '', 'field': 'email', 'routing': []},
         'fromName': business, 'fromEmail': to_address, 'replyTo': to_address, 'bcc': '',
-        'subject': f'We got your message — {business}',
-        'message': _email_shell(client_inner, 'Thanks {inputs.name} — we will be in touch',
+        'subject': f'We got your message, {business}',
+        'message': _email_shell(client_inner, 'Thanks {inputs.name}. We will be in touch',
                                 logo_url, business, address, hours),
         'conditionals': {'status': False, 'type': 'all', 'conditions': []},
         'enabled': True, 'email_template': '',
@@ -237,14 +241,14 @@ def emails(form_id, to_address, business='Our Shop', logo_url='', address='', ho
     rows = wp.ff_settings(form_id, 'notifications')
     print('notifications now:', [(r['id'], r['value']['name']) for r in rows])
     if len({r['value']['name'] for r in rows}) != len(rows):
-        print('WARNING: duplicate notification rows — pass meta_id when updating.')
+        print('WARNING: duplicate notification rows, pass meta_id when updating.')
 
 
 def seo(descriptions=None):
     """
     Stage meta descriptions. Rank Math does not expose rank_math_* meta over REST until
     its wizard has run, but its default template falls back to the excerpt, which is a
-    first-class REST field — so writing excerpts works before or after the wizard.
+    first-class REST field, so writing excerpts works before or after the wizard.
     """
     wp = WP()
     pages = wp.get('wp/v2/pages?per_page=100&status=publish,draft')

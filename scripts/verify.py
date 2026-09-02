@@ -10,12 +10,12 @@ Checks the things that actually broke in practice:
   * exactly one h1, and a heading outline with no skipped levels
   * every image has alt text and intrinsic width/height
   * every button/link has a discernible accessible name (the PSI "agent
-    accessibility" audit) — icon-only controls need aria-label
+    accessibility" audit), icon-only controls need aria-label
   * blocks got their CSS: `gsbp-` classes present AND matching CSS rules emitted
   * stylebook tokens resolved (no literal `var(--gt-` left unresolved in styles)
 
 It does NOT replace a browser check for layout. Use the browser for responsive and
-for anything JS-driven — this is the fast fail-early pass.
+for anything JS-driven. This is the fast fail-early pass.
 """
 import argparse
 import re
@@ -54,7 +54,7 @@ def check(url):
     levels = [int(tag[1]) for tag, _ in headings]
     h1_count = levels.count(1)
     if h1_count != 1:
-        problems.append(f'{h1_count} h1 elements (expected exactly 1) — '
+        problems.append(f'{h1_count} h1 elements (expected exactly 1), '
                         'check the page template is "no-title"')
     previous = 0
     for level in levels:
@@ -72,7 +72,40 @@ def check(url):
         problems.append(f'{len(no_alt)} image(s) without an alt attribute')
     if no_dims:
         problems.append(f'{len(no_dims)} image(s) without width/height (layout shift)')
+
+    # Raster sources must be WebP. Image weight is normally the largest thing on
+    # the page, and a single hand-uploaded PNG undoes the image pipeline.
+    legacy = sorted({m.group(1) for i in images
+                     for m in [re.search(r'src="([^"]+\.(?:png|jpe?g))(?:\?|")', i, re.I)]
+                     if m})
+    if legacy:
+        problems.append(f'{len(legacy)} image(s) served as PNG/JPEG instead of WebP:')
+        for src in legacy[:5]:
+            problems.append('    ' + src.rsplit('/', 1)[-1])
+        if len(legacy) > 5:
+            problems.append(f'    …and {len(legacy) - 5} more')
+        problems.append('    convert with scripts/prep_images.py, audit with '
+                        '"prep_images.py audit"')
     notes.append(f'images: {len(images)}')
+
+    # Fonts fail silently: a family installed but not activated on global styles
+    # emits no @font-face and falls back to a system font with no error anywhere.
+    faces = len(re.findall(r'@font-face', html))
+    cdn = len(re.findall(r'fonts\.(?:googleapis|gstatic)\.com', html))
+    notes.append('fonts: %d @font-face, %d Google CDN refs' % (faces, cdn))
+    if faces == 0:
+        problems.append('no @font-face in the page — either no webfont is loaded, or a '
+                        'font family is installed but not activated on the global-styles '
+                        'record, which is silent')
+
+    # Core's flow margin puts 1.6rem between top-level sections, which reads as a
+    # seam between adjacent full-bleed colour bands.
+    if re.search(r'is-layout-flow\)\s*>\s*\*\s*\{[^}]*margin-block-start:\s*(?!0)', html):
+        if not re.search(r'body\s+\.is-layout-flow\s*>\s*\*\s*\{[^}]*margin-block-start:\s*0',
+                         html):
+            problems.append("core's .is-layout-flow margin-block-start is active and not "
+                            "overridden — adjacent full-width sections will show a seam. "
+                            "Add `body .is-layout-flow > * { margin-block-start: 0 }`")
 
     nameless = []
     for match in re.finditer(r'<(a|button)\b([^>]*)>(.*?)</\1>', html, re.S | re.I):
@@ -87,7 +120,7 @@ def check(url):
             snippet = (tag + attrs)[:90].replace('\n', ' ')
             nameless.append(snippet)
     if nameless:
-        problems.append(f'{len(nameless)} link(s)/button(s) with no accessible name — '
+        problems.append(f'{len(nameless)} link(s)/button(s) with no accessible name, '
                         'agents and screen readers cannot use them:')
         for snippet in nameless[:5]:
             problems.append(f'    <{snippet}…')
@@ -97,7 +130,7 @@ def check(url):
     unstyled = block_classes - styled
     notes.append(f'blocks: {len(block_classes)}, with CSS: {len(styled)}')
     if block_classes and len(styled) == 0:
-        problems.append('NO block CSS emitted — blocks are missing "CSSRender": true, '
+        problems.append('NO block CSS emitted, blocks are missing "CSSRender": true, '
                         'or stale _gspb_post_css is overriding (clear it via css_settings)')
 
     tokens = set(re.findall(r'(--gt-[a-z0-9-]+)\s*:', html))

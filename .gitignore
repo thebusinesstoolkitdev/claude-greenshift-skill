@@ -1,26 +1,4 @@
-# credentials — never commit
-.env
-.env.*
-!.env.example
-
-# project working files
-input/
-output/
-assets/
-reference/media-map.json
-reference/*-node.json
-reference/*.png
-reference/*.jpg
-reference/tp-*.html
-
-# python
 __pycache__/
-*.py[cod]
-.venv/
-venv/
-
-# os / editor
+*.pyc
+.env
 .DS_Store
-Thumbs.db
-.vscode/
-.idea/

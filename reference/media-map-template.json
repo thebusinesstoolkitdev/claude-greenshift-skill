@@ -1,0 +1,22 @@
+{
+ "_comment": "Per-project image manifest. You write slug + alt before uploading; prep_images.py fills in id/url/width/height. The slug is the filename stem in assets/ (hero-team -> hero-team.webp). Alt text is required: upload refuses any image without it, and sets it on the attachment as well as the block so the media library stays correct. Write what the image shows for someone who cannot see it, not a keyword list; use alt=\"\" only for genuinely decorative images.",
+
+ "hero-team": {
+  "alt": "The full team behind a bar, set up and ready before an event",
+  "id": 128,
+  "url": "https://example.com/wp-content/uploads/2026/08/hero-team.webp",
+  "width": 1600,
+  "height": 1067
+ },
+ "logo-primary": {
+  "alt": "Example Company",
+  "id": 129,
+  "url": "https://example.com/wp-content/uploads/2026/08/logo-primary.webp",
+  "width": 512,
+  "height": 512
+ },
+ "placeholder-interior": {
+  "alt": "Placeholder: interior shot pending from the client",
+  "placeholder": true
+ }
+}

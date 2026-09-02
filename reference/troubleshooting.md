@@ -5,34 +5,41 @@ that is what you will have when you arrive.
 
 ---
 
+
+Entries marked _Greenshift backend only_ do not apply when `blocks.py` is set to the `core` backend, which has no per-block compiled CSS and so cannot fail in these ways.
+
 ## Blocks render with no styling at all
 
-**Symptom** — Page structure is right, content is right, everything is unstyled. Block
+_Greenshift backend only._
+
+**Symptom**. Page structure is right, content is right, everything is unstyled. Block
 `gsbp-xxxxxxx` classes are in the HTML but no matching CSS rules anywhere.
 
-**Cause** — Greenshift normally compiles block CSS *in the editor* on save. Blocks pushed
+**Cause**. Greenshift normally compiles block CSS *in the editor* on save. Blocks pushed
 over the REST API never pass through the editor, so nothing compiles them.
 
-**Fix** — Add `"CSSRender": true` to every block that carries `styleAttributes`. This tells
-the server to compile the styles at render time. `gsblocks.block()` does this automatically.
+**Fix**. Add `"CSSRender": true` to every block that carries `styleAttributes`. This tells
+the server to compile the styles at render time. `blocks.block()` does this automatically.
 
-**Check** — `python scripts/verify.py <url>` reports `blocks: N, with CSS: M`. If M is 0,
+**Check**, `python scripts/verify.py <url>` reports `blocks: N, with CSS: M`. If M is 0,
 this is your problem.
 
 ---
 
 ## Mobile layout ignores the mobile breakpoint
 
-**Symptom** — Tablet styling is correct, but at 375px the layout falls back to the desktop
+_Greenshift backend only._
+
+**Symptom**. Tablet styling is correct, but at 375px the layout falls back to the desktop
 value. A three-column footer stays three columns and squeezes.
 
-**Cause** — Greenshift's *server-side* CSSRender mishandles three-entry responsive arrays.
+**Cause**. Greenshift's *server-side* CSSRender mishandles three-entry responsive arrays.
 `["1fr 1fr 1fr", "1fr 1fr", "1fr"]` compiles the tablet entry scoped to
 `(min-width:768px) and (max-width:991.98px)` and drops the mobile entry entirely. The
-editor's own compiler handles these fine — which is why it looks correct in the editor and
+editor's own compiler handles these fine, which is why it looks correct in the editor and
 breaks on the front end.
 
-**Fix** — Never put multi-value arrays in `styleAttributes` on REST-pushed blocks. Use a
+**Fix**. Never put multi-value arrays in `styleAttributes` on REST-pushed blocks. Use a
 single value with `clamp()`/`min()` for fluid properties, and put every breakpoint in a
 stylebook global class (`gt-grid-4`, `gt-footer-grid`, …). Media queries inside global class
 CSS are emitted verbatim and work correctly.
@@ -41,32 +48,34 @@ CSS are emitted verbatim and work correctly.
 
 ## "This block contains unexpected or invalid content" / Attempt recovery
 
-**Symptom** — Opening the page in the editor offers "Attempt recovery". Accepting it strips
+_Greenshift backend only._
+
+**Symptom**. Opening the page in the editor offers "Attempt recovery". Accepting it strips
 your `data-*` / `aria-*` attributes and interactive features stop working.
 
-**Cause** — Gutenberg re-generates each block's HTML from its JSON and compares. Attributes
+**Cause**. Gutenberg re-generates each block's HTML from its JSON and compares. Attributes
 present only in the raw HTML do not survive the round trip, so validation fails.
 
-**Fix** — Declare every custom attribute in the block JSON *and* render it in the HTML:
+**Fix**. Declare every custom attribute in the block JSON *and* render it in the HTML:
 
 ```json
 "dynamicAttributes": [{"name": "data-cat", "value": "dresses"}]
 ```
 
-`gsblocks.block(attrs={'data-cat': 'dresses'})` handles both sides for you.
+`blocks.block(attrs={'data-cat': 'dresses'})` handles both sides for you.
 
 ---
 
 ## Filter/toggle JavaScript "works" but nothing visibly changes
 
-**Symptom** — Clicking a filter updates `aria-pressed`, the console shows the handler
-running, `el.hidden = true` is set — and every card stays on screen.
+**Symptom**. Clicking a filter updates `aria-pressed`, the console shows the handler
+running, `el.hidden = true` is set, and every card stays on screen.
 
-**Cause** — The UA rule `[hidden] { display: none }` has almost no specificity. Any block
+**Cause**. The UA rule `[hidden] { display: none }` has almost no specificity. Any block
 CSS setting `display: flex` on that element wins, so the element stays visible while
 *reporting* itself as hidden. Checking `el.hidden` in the console confirms a lie.
 
-**Fix** — Set inline style instead: `el.style.display = 'none'` / `''`.
+**Fix**. Set inline style instead: `el.style.display = 'none'` / `''`.
 
 **Verify visually, not by property**: an element is genuinely hidden only if
 `el.offsetParent === null` or `getComputedStyle(el).display === 'none'`. Assert on that.
@@ -81,14 +90,32 @@ re-saves, block reordering, and late-loading markup.
 
 ---
 
+## Client says "I can't edit this section" / a section ignores the stylebook
+
+The section was built as raw markup inside a `core/html` block instead of element blocks.
+Symptoms cluster: the block editor shows one opaque code box where a grid of cards should
+be, changing a `gt-` layout class or a token moves everything on the page except that
+section, and `verify.py` reports clean while the section has no heading order and unlabelled
+images.
+
+`raw_html()` raises on content-shaped markup for exactly this reason. If a section already
+shipped this way, rebuild it: `grid()` wrapping one `block(seed, 'article')` per card, each
+holding a `heading()` and a `block(seed, 'p')`. Keep `core/html` for scripts, JSON-LD,
+stylesheets and shortcodes.
+
 ## Element styles are overridden by the theme
 
-**Symptom** — `h1` font-size from the stylebook is ignored; the theme's size wins.
+_Greenshift backend only._
 
-**Cause** — Both rules have identical specificity, and the theme's stylesheet loads later.
+**Symptom**, `h1` font-size from the stylebook is ignored; the theme's size wins.
 
-**Fix** — Prefix element-style selectors with `body`: `body h1 { … }`. Keep the editor
+**Cause**. Both rules have identical specificity, and the theme's stylesheet loads later.
+
+**Fix**. Prefix element-style selectors with `body`: `body h1 { … }`. Keep the editor
 counterpart as `.editor-styles-wrapper h1 { … }`.
+
+The `body` element style itself is the exception: the theme's own rule is also `body { … }`,
+so prefixing does not break the tie. Use `html body { … }` there.
 
 ---
 
@@ -100,16 +127,129 @@ The theme prints the page title above your content. Assign the template that omi
 {"template": "no-title"}
 ```
 
-Confirm the slug exists with `GET /wp-json/wp/v2/templates` — themes name it differently.
+Confirm the slug exists with `GET /wp-json/wp/v2/templates`, themes name it differently.
+
+---
+
+## A WebP conversion came out bigger than the original
+
+**Symptom**, `prep_images.py build` reports an output larger than its source, usually on a
+logo, a screenshot, a diagram or a flat illustration rather than a photograph.
+
+**Cause**, lossy WebP is tuned for photographic gradients. Large flat areas with hard
+edges are its worst case: it spends bytes trying to reproduce edges it cannot represent.
+PNG compresses exactly that content almost perfectly, so lossy WebP loses badly.
+
+**Fix**, already handled: `encode_webp()` in `wp_api.py` encodes both ways and keeps the
+smaller, and the build prints which mode won. If something still grows after that, the
+source is probably a screenshot that should be an SVG, or a PNG that is already optimal, `keep_format=True` on `upload_media()` is the deliberate exception.
+
+---
+
+## A PNG or JPEG reached the media library
+
+**Symptom**, `verify.py --all` or `prep_images.py audit` reports images served as PNG or
+JPEG. Usually a logo, a favicon source, or something a client emailed and someone uploaded
+through wp-admin.
+
+**Cause**, `upload_media()` converts raster to WebP, but wp-admin does not. Anything added
+through the WordPress UI bypasses the pipeline entirely.
+
+**Fix**, convert and re-point, do not just re-upload alongside:
+
+```
+python scripts/prep_images.py build          # writes assets/<name>.webp
+python scripts/prep_images.py upload         # new attachment id
+python scripts/prep_images.py audit          # confirm zero
+```
+
+Update the block markup (and `media-map.json`) to the new id and URL, then delete the old
+attachment. Leaving both means the old one stays reachable and may still be referenced by a
+srcset the theme generated.
+
+**Note**, the WordPress site icon and the theme logo are the usual stragglers; both accept
+WebP. GIF is deliberately left alone because converting drops the animation.
+
+---
+
+## A check says an attribute is missing, but the page is fine
+
+**Symptom**, a script greps stored block content for `"CSSRender": true` or
+`"type": "text"` and finds nothing, while the page renders correctly and the editor is
+happy.
+
+**Cause**. WordPress re-serialises block-comment JSON when it saves. What you pushed as
+`{"id": "gsbp-abc1234", "CSSRender": true}` comes back as
+`{"id":"gsbp-abc1234","CSSRender":true}`. The data is identical; the spacing is not.
+
+**Fix**, parse the JSON, never grep it:
+
+```python
+payloads = [json.loads(x.replace('\u002d\u002d', '--'))
+            for x in re.findall(r'element (\{.*?\}) -->', raw, re.S)]
+missing = [d for d in payloads if 'styleAttributes' in d and d.get('CSSRender') is not True]
+```
+
+Escapes survive the round trip intact, so `--` has to be restored before the
+JSON will parse. Verified on a live install: `type`, `CSSRender`, `localId` and the
+unicode-escaped icon markup all come back byte-faithful apart from whitespace.
+
+---
+
+## A live page went back to draft after a content push
+
+**Symptom**, a published page is suddenly a draft, or a draft is suddenly live, after a
+routine content update.
+
+**Cause**, the push helper sends `status` on every call. Written while every page was a
+draft, it silently unpublishes the site the first time it runs against production. The
+reverse also happens: a REST write can flip a draft to published as a side effect, with no
+warning.
+
+**Fix**, send `status` only when creating a page or deliberately changing state. Content
+updates send `{"content": …}` and nothing else. Read the statuses back after any bulk push:
+
+```python
+for p in wp.get('wp/v2/pages?per_page=100&status=any&context=edit'):
+    print(p['id'], p['status'], p['slug'])
+```
+
+---
+
+## A section reads as unstyled, but only when it is full-width
+
+**Symptom**, the same prose class looks right in a two-column layout and wrong in a
+single-column section. Tokens are defined, CSS is compiled, nothing is missing.
+
+**Cause**, the class has colour, size and line-height but no `max-width`, so full-width
+prose runs to about 180 characters per line. The eye reads it as broken styling.
+
+**Fix**, cap every prose class at 65-75ch (`reference/starter-tokens.json` does), and add
+`text-wrap: balance` to `h1` to `h3`. See `reference/site-conventions.md`.
+
+---
+
+## A deleted stylebook class is still on the site
+
+**Symptom**. You removed a class from the local definition and pushed, and elements still
+pick it up.
+
+**Cause**, the push replaces the array it sends; it does not diff. A class you stopped
+defining was simply not in the payload, so the stored copy survives untouched.
+
+**Fix**, prune explicitly. Read the stored classes, keep everything outside your prefix,
+drop the prefixed ones no longer defined, then write the merged array.
 
 ---
 
 ## Old styles keep coming back after a REST update
 
-**Cause** — If a page was ever opened and saved in the editor, `_gspb_post_css` post meta
+_Greenshift backend only._
+
+**Cause**. If a page was ever opened and saved in the editor, `_gspb_post_css` post meta
 holds a snapshot of compiled CSS which is enqueued alongside the fresh server-rendered CSS.
 
-**Fix** — Clear it after pushing content:
+**Fix**. Clear it after pushing content:
 
 ```
 POST /wp-json/greenshift/v1/css_settings   {"id": <post_id>, "css": ""}
@@ -121,21 +261,21 @@ POST /wp-json/greenshift/v1/css_settings   {"id": <post_id>, "css": ""}
 
 ## Stylebook update wipes other settings
 
-**Cause** — `POST /greenshift/v1/global_settings` merges only at the top level. Whatever
+**Cause**, `POST /greenshift/v1/global_settings` merges only at the top level. Whatever
 array you send for `variables` or `global_classes` **replaces** the stored one.
 
-**Fix** — Always read current settings, merge locally, send the complete array.
+**Fix**. Always read current settings, merge locally, send the complete array.
 `WP.gs_upsert_classes()` / `gs_upsert_variables()` / `scripts/stylebook.py push` do this.
 
 ---
 
 ## Fluent Forms: duplicate notifications, or settings changes that do not stick
 
-**Cause** — `POST /fluentform/v1/settings/{form_id}` **inserts a new row** unless you pass
+**Cause**, `POST /fluentform/v1/settings/{form_id}` **inserts a new row** unless you pass
 `meta_id`. A second `notifications` row means two emails; a second `formSettings` row means
 the old confirmation may still win.
 
-**Fix** — Read the setting first, pass the row's `id` back as `meta_id`:
+**Fix**. Read the setting first, pass the row's `id` back as `meta_id`:
 
 ```python
 row = wp.ff_settings(form_id, 'formSettings')[0]
@@ -146,7 +286,7 @@ Delete an accidental duplicate with `DELETE /fluentform/v1/settings/{form_id}` a
 `{"meta_id": <id>}`.
 
 Also note `POST /fluentform/v1/forms` rejects payloads without one of its own template keys
-("The selected template couldn't be found") — duplicate the bundled demo form instead, then
+("The selected template couldn't be found"), duplicate the bundled demo form instead, then
 overwrite its fields.
 
 ---
@@ -156,7 +296,7 @@ overwrite its fields.
 Large plugins exceed the request timeout while unzipping. The files land; the response
 fails. A retry then reports `folder_exists`.
 
-**Fix** — Treat 500/`folder_exists` as "probably installed": re-read `GET /wp/v2/plugins`
+**Fix**. Treat 500/`folder_exists` as "probably installed": re-read `GET /wp/v2/plugins`
 and activate whatever is present. `WP.install_plugin()` implements this.
 
 ---
@@ -166,7 +306,7 @@ and activate whatever is present. `WP.install_plugin()` implements this.
 `rank_math_title` / `rank_math_description` are not registered for REST until the setup
 wizard has run, and even then may not be exposed.
 
-**Workaround** — Rank Math's default description template falls back to the post excerpt,
+**Workaround**. Rank Math's default description template falls back to the post excerpt,
 which *is* a first-class REST field. Write excerpts and the descriptions appear.
 
 Two manual steps remain: run the setup wizard, then **Settings → Permalinks → Save** to
@@ -176,13 +316,13 @@ flush rewrite rules, otherwise `/sitemap_index.xml` 404s.
 
 ## Scripted requests start returning 403
 
-**Symptom** — curl/urllib worked, then every request returns 403 while a browser loads the
+**Symptom**, curl/urllib worked, then every request returns 403 while a browser loads the
 site fine.
 
-**Cause** — Security plugins (SiteGround Security, Wordfence, …) rate-limit or block
+**Cause**. Security plugins (SiteGround Security, Wordfence, …) rate-limit or block
 non-browser user agents after repeated hits.
 
-**Fix** — Send a real browser `User-Agent` (`scripts/verify.py` does), space out requests,
+**Fix**. Send a real browser `User-Agent` (`scripts/verify.py` does), space out requests,
 and when in doubt verify in a browser instead. This affects only front-end page fetches;
 authenticated REST calls keep working.
 
@@ -201,7 +341,7 @@ Seen for real: a regex in a checker contained a literal backspace byte (`0x08`) 
 `\b` escape was interpreted when the file was written through a shell heredoc. The pattern
 silently never matched, and the checker reported false failures.
 
-**Rule** — When a check disagrees with a manual inspection, suspect the checker. Print the
+**Rule**. When a check disagrees with a manual inspection, suspect the checker. Print the
 values it is actually comparing (`repr()`), and `od -c` the source line if a regex is
 involved. Write files with the editor tools rather than shell heredocs when they contain
 regex escapes.

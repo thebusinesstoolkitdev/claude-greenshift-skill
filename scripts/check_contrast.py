@@ -3,8 +3,7 @@
 WCAG contrast gate for a brand palette.
 
 Run this BEFORE writing colour tokens into the stylebook. Designers routinely hand
-over muted greys and mid-tone brand colours that fail AA on a light background —
-catching it here means one token change instead of a site-wide retrofit later.
+over muted greys and mid-tone brand colours that fail AA on a light background, catching it here means one token change instead of a site-wide retrofit later.
 
     python check_contrast.py --bg "#fbf6ec" --fg body:#8c8172 accent:#e27b4b
     python check_contrast.py --pairs "#ffffff on #7c8b54" "#fbf6ec on #7e5aa6"
@@ -100,7 +99,7 @@ def main():
               else f'no passing variant of {args.fix} on {args.bg}')
 
     if failures:
-        print(f'\n{failures} colour(s) below {args.target}:1 — fix the TOKEN, not the usage.')
+        print(f'\n{failures} colour(s) below {args.target}:1, fix the TOKEN, not the usage.')
     return 1 if failures else 0
 
 

@@ -17,10 +17,14 @@ Usage:
     wp.gs_settings()                # Greenshift global settings (stylebook)
 """
 import base64
+import io
 import json
 import os
 import urllib.error
 import urllib.request
+
+UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+      '(KHTML, like Gecko) Chrome/124.0 Safari/537.36')
 
 
 def load_env(path='.env'):
@@ -34,6 +38,35 @@ def load_env(path='.env'):
                 continue
             key, _, value = line.partition('=')
             os.environ.setdefault(key.strip(), value.strip())
+
+
+def encode_webp(img, quality=82):
+    """Encode to WebP, keeping whichever of lossy or lossless comes out smaller.
+
+    Fixed lossy quality is the obvious default and it is wrong for a whole class
+    of images every site has: logos, screenshots, diagrams, flat illustrations,
+    anything with large flat areas and hard edges. Lossy encoders spend bytes on
+    the edges they cannot represent, so a 79kB PNG logo can come back as a 153kB
+    WebP, a real regression dressed up as an optimisation. Photographs go the
+    other way and compress far better lossy.
+
+    Trying both costs one extra encode and removes the guesswork. Returns
+    (bytes, description) so the caller can report which mode won.
+    """
+    import io as _io
+    out = []
+    for how, kw in (('lossy q%d' % quality, {'quality': quality, 'method': 6}),
+                    ('lossless', {'lossless': True, 'method': 6})):
+        buf = _io.BytesIO()
+        try:
+            img.save(buf, 'WEBP', **kw)
+        except Exception:
+            continue
+        out.append((len(buf.getvalue()), how, buf.getvalue()))
+    if not out:
+        raise ValueError('WebP encoding failed for this image')
+    size, how, data = min(out, key=lambda t: t[0])
+    return data, how
 
 
 class WPError(Exception):
@@ -57,13 +90,16 @@ class WP:
     # ---------- core ----------
 
     def request(self, route, payload=None, method=None, raw_body=None, headers=None):
-        """route is relative to /wp-json/ — e.g. 'wp/v2/pages/12?context=edit'."""
+        """route is relative to /wp-json/, e.g. 'wp/v2/pages/12?context=edit'."""
         url = f'{self.url}/wp-json/{route.lstrip("/")}'
         data = raw_body if raw_body is not None else (
             json.dumps(payload).encode() if payload is not None else None)
         req = urllib.request.Request(
             url, data=data, method=method or ('POST' if data is not None else 'GET'))
         req.add_header('Authorization', 'Basic ' + self.auth)
+        # Cloudflare and most security plugins 403 the default Python-urllib
+        # agent, which fails on the very first call of a build.
+        req.add_header('User-Agent', UA)
         if raw_body is None:
             req.add_header('Content-Type', 'application/json')
         for key, value in (headers or {}).items():
@@ -110,15 +146,55 @@ class WP:
             'namespaces': namespaces,
         }
 
-    def upload_media(self, path, mime=None):
-        """Upload a local file to the media library. Returns the attachment object."""
+    @staticmethod
+    def _encode_webp(img):
+        return encode_webp(img)
+
+    def upload_media(self, path, mime=None, keep_format=False):
+        """Upload a local file to the media library. Returns the attachment object.
+
+        Raster sources are converted to WebP first. Image weight is usually the
+        largest thing on the page, WebP is 25-35% smaller than JPEG at the same
+        quality, and a single stray PNG uploaded by hand undoes the whole image
+        pipeline. Conversion happens here, at the only door into the library, so
+        it cannot be skipped by accident.
+
+        SVG passes through untouched (vector, nothing to convert). GIF passes
+        through because converting drops the animation. Pass keep_format=True for
+        a genuine exception, such as a source a third party requires verbatim.
+        """
+        raster = ('.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp')
         filename = os.path.basename(path)
+        stem, ext = os.path.splitext(filename)
+        data = None
+
+        if ext.lower() in raster and not keep_format:
+            try:
+                from PIL import Image
+            except ImportError:
+                raise SystemExit(
+                    f'{filename} is {ext.lstrip(".").upper()} and must be WebP before '
+                    'upload, but Pillow is not installed.\n'
+                    '  pip install Pillow      then: python scripts/prep_images.py build\n'
+                    'Pass keep_format=True only if the original format is genuinely '
+                    'required.')
+            img = Image.open(path)
+            img = img.convert('RGBA' if 'A' in img.getbands() else 'RGB')
+            data, how = encode_webp(img)
+            before = os.path.getsize(path)
+            grew = '. LARGER than the source, check this one' if len(data) > before else ''
+            print(f'  converted {filename} -> {stem}.webp '
+                  f'({before // 1024}kB -> {len(data) // 1024}kB, {how}){grew}')
+            filename, mime = stem + '.webp', 'image/webp'
+
         if mime is None:
-            ext = filename.rsplit('.', 1)[-1].lower()
             mime = {'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
-                    'webp': 'image/webp', 'svg': 'image/svg+xml'}.get(ext, 'application/octet-stream')
-        with open(path, 'rb') as fh:
-            data = fh.read()
+                    'webp': 'image/webp', 'gif': 'image/gif',
+                    'svg': 'image/svg+xml'}.get(
+                        filename.rsplit('.', 1)[-1].lower(), 'application/octet-stream')
+        if data is None:
+            with open(path, 'rb') as fh:
+                data = fh.read()
         return self.request('wp/v2/media', raw_body=data, method='POST', headers={
             'Content-Type': mime,
             'Content-Disposition': f'attachment; filename="{filename}"',
@@ -212,7 +288,7 @@ class WP:
         """
         Install (and optionally activate) a wordpress.org plugin.
 
-        Large plugins often time out with HTTP 500 while the files land fine — this
+        Large plugins often time out with HTTP 500 while the files land fine. This
         retries activation and reports the real state instead of failing.
         """
         try:
@@ -231,7 +307,11 @@ class WP:
     # ---------- Fluent Forms ----------
 
     def ff_forms(self):
-        return self.get('fluentform/v1/forms')
+        """All Fluent Forms. The endpoint returns a paginated envelope
+        ({current_page, per_page, data: [...]}), not a bare list, so iterating the
+        response directly raises TypeError: string indices must be integers."""
+        data = self.get('fluentform/v1/forms')
+        return data.get('data', []) if isinstance(data, dict) else data
 
     def ff_settings(self, form_id, meta_key):
         return self.get(f'fluentform/v1/settings/{form_id}?meta_key={meta_key}')

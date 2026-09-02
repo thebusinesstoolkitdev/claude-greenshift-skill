@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # EXAMPLE — a real four-page build, with the client details swapped out.
 # Copy into your project and adapt. The reusable primitives live in
-# scripts/gsblocks.py; this file shows how a whole page is assembled.
+# scripts/blocks.py; this file shows how a whole page is assembled.
 """Build header (surgical edit) + footer (rewrite) template parts."""
 import json, hashlib, re, io, sys, os
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')

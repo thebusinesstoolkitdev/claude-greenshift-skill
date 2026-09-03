@@ -6,11 +6,11 @@ that is what you will have when you arrive.
 ---
 
 
-Entries marked _Greenshift backend only_ do not apply when `blocks.py` is set to the `core` backend, which has no per-block compiled CSS and so cannot fail in these ways.
+Entries marked _GreenLight backend only_ do not apply when `blocks.py` is set to the `core` backend, which has no per-block compiled CSS and so cannot fail in these ways.
 
 ## Blocks render with no styling at all
 
-_Greenshift backend only._
+_GreenLight backend only._
 
 **Symptom**. Page structure is right, content is right, everything is unstyled. Block
 `gsbp-xxxxxxx` classes are in the HTML but no matching CSS rules anywhere.
@@ -28,7 +28,7 @@ this is your problem.
 
 ## Mobile layout ignores the mobile breakpoint
 
-_Greenshift backend only._
+_GreenLight backend only._
 
 **Symptom**. Tablet styling is correct, but at 375px the layout falls back to the desktop
 value. A three-column footer stays three columns and squeezes.
@@ -66,7 +66,7 @@ browser. `blocks.component_scripts()` is written `&`-free.
 
 ## A class has a mobile media query, the element ignores it
 
-_Greenshift backend, converter output especially._
+_GreenLight backend, converter output especially._
 
 **Symptom**. `.site-footer{flex-direction:column}` with `@media(min-width:900px){…row}` in
 a local class, yet the footer stays a row at 375px and squeezes into two columns.
@@ -111,7 +111,7 @@ decorations without `::before`/`::after`. A transparent border with a negative m
 
 ## CSS in a stylemanager block reaches the editor but not the front end
 
-_Greenshift backend, template parts / templates / patterns._
+_GreenLight backend, template parts / templates / patterns._
 
 **Symptom**. A tag-led rule (`nav a`, `:root{--x}`, `@keyframes`) or a `customCSS_Extra`
 shows in the editor canvas and is absent from the rendered page, while the local classes in
@@ -130,7 +130,7 @@ page target nothing is lost: `compile_css()` includes both.
 
 ## "This block contains unexpected or invalid content" / Attempt recovery
 
-_Greenshift backend only._
+_GreenLight backend only._
 
 **Symptom**. Opening the page in the editor offers "Attempt recovery". Accepting it strips
 your `data-*` / `aria-*` attributes and interactive features stop working.
@@ -187,7 +187,7 @@ stylesheets and shortcodes.
 
 ## Element styles are overridden by the theme
 
-_Greenshift backend only._
+_GreenLight backend only._
 
 **Symptom**, `h1` font-size from the stylebook is ignored; the theme's size wins.
 
@@ -341,7 +341,7 @@ drop the prefixed ones no longer defined, then write the merged array.
 
 ## Old styles keep coming back after a REST update
 
-_Greenshift backend only._
+_GreenLight backend only._
 
 **Cause**. If a page was ever opened and saved in the editor, `_gspb_post_css` post meta
 holds a snapshot of compiled CSS which is enqueued alongside the fresh server-rendered CSS.

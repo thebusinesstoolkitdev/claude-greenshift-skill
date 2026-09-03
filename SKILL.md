@@ -604,6 +604,32 @@ animation frames, so tweens sit at their first frame there; `ScrollTrigger` call
 console errors are observable, tween progress is not. `reference/site-conventions.md`
 lists the other things headless rendering never does.
 
+## Interactive components
+
+`blocks.py` builds four components as semantic, accessible markup rather than the plugin's
+native `isVariation` types. The native accordion/tabs/counter/countdown load their
+front-end scripts from the same option the editor writes on save, so a native-variation
+block pushed over REST renders inert; these carry their behaviour in one page script
+instead, and the accordion needs no script at all.
+
+| Helper | Markup | Script |
+|---|---|---|
+| `accordion(seed, items, exclusive=True, open_first=False)` | native `<details>/<summary>` | none; `exclusive` uses the HTML `name` attribute for single-open (Chrome 120+/Safari 17.4+/FF130+, older browsers allow several open) |
+| `tabs(seed, panels)` | `role=tablist` buttons + `role=tabpanel` regions | `component_scripts()` |
+| `counter(seed, value, suffix='')` | a `<span>` whose text is the final value | `component_scripts()` (counts up on first view, respects reduced motion) |
+| `countdown(seed, deadline_iso)` | four labelled cells | `component_scripts()` |
+
+Emit `blocks.component_scripts()` once, last in the page content. It is event-delegated and
+idempotent. Tabs and counter render fully visible so the block is editable and degrades to
+readable content with scripts off; the script sets the hidden/zero state, never base CSS.
+The stylebook ships `gt-acc-*`, `gt-tab*`, `gt-cd-*` classes for all four.
+
+**`wp:html` scripts must not contain `&`.** WordPress entity-encodes it to `&#038;` and a
+`<script>` never decodes entities, so `a && b` reaches the engine broken and throws at parse
+time. Write `&&` as nested `if`s or `!(!a || !b)` (`||` is unaffected), or store the script
+with `WP.set_block_js()`, whose option path is not encoded. `script_block()` refuses a
+literal `&` rather than shipping it broken.
+
 ## Accessibility and agent readiness
 
 Treat these as build requirements, not a later pass:

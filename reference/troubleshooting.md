@@ -51,6 +51,19 @@ gl-page-builder 3.3.7, `["1fr 1fr 1fr", "1fr 1fr", "1fr"]` compiles to a desktop
 
 ---
 
+## A wp:html script throws "Invalid or unexpected token" at parse time
+
+**Cause**. The script contains `&` (usually `&&`). WordPress encodes it to `&#038;` inside a
+`wp:html` block, and a `<script>` is a raw-text element the browser never entity-decodes, so
+the engine sees `&#038;&#038;` and throws. `<` and `>` are left alone; only `&` breaks.
+
+**Fix**. Rewrite `a && b` as nested `if`s or `!(!a || !b)` (`||` is fine), or store the
+script through `WP.set_block_js()` (the `gspb_block_js` option, which is not encoded).
+`blocks.script_block()` now refuses a literal `&` so this fails at build time, not in the
+browser. `blocks.component_scripts()` is written `&`-free.
+
+---
+
 ## A class has a mobile media query, the element ignores it
 
 _Greenshift backend, converter output especially._

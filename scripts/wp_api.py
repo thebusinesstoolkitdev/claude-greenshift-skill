@@ -87,12 +87,17 @@ class WP:
             raise SystemExit('Missing WP_URL / WP_USER / WP_APP_PASSWORD (env or .env)')
         self.auth = base64.b64encode(f'{user}:{app_password}'.encode()).decode()
         self.timeout = timeout
+        # 'pretty' = /wp-json/..., 'query' = /?rest_route=/... The query form is
+        # what WordPress falls back to when rewrite rules were never flushed (a
+        # fresh install whose permalinks were never saved): /wp-json/ then serves
+        # the front page as HTML. Detected on the first non-JSON answer.
+        self.rest_style = 'pretty'
 
     # ---------- core ----------
 
     def request(self, route, payload=None, method=None, raw_body=None, headers=None):
         """route is relative to /wp-json/, e.g. 'wp/v2/pages/12?context=edit'."""
-        url = f'{self.url}/wp-json/{route.lstrip("/")}'
+        url = self.rest_url(route)
         data = raw_body if raw_body is not None else (
             json.dumps(payload).encode() if payload is not None else None)
         req = urllib.request.Request(
@@ -115,9 +120,21 @@ class WP:
         try:
             parsed = json.loads(body)
         except json.JSONDecodeError:
+            if self.rest_style == 'pretty' and body.lstrip()[:15].lower().startswith(('<!doctype', '<html')):
+                # /wp-json/ is not routed on this site; switch to ?rest_route= and retry once
+                self.rest_style = 'query'
+                return self.request(route, payload=payload, method=method, raw_body=raw_body,
+                                    headers=headers)
             return body
         # Several Greenshift endpoints return a JSON-encoded *string*.
         return json.loads(parsed) if isinstance(parsed, str) else parsed
+
+    def rest_url(self, route):
+        route = route.lstrip('/')
+        if self.rest_style == 'pretty':
+            return f'{self.url}/wp-json/{route}'
+        path, _, qs = route.partition('?')
+        return f'{self.url}/?rest_route=/{path}' + ('&' + qs if qs else '')
 
     def get(self, route):
         return self.request(route)

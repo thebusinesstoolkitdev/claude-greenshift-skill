@@ -66,7 +66,7 @@ def block(seed, tag, inner=None, text=None, style=None, extra=None, html_attrs='
 topbar = block('topbar', 'div', inner=
     block('topbartxt', 'div', text='Come visit us in-store · Made &amp; styled with care in Ashford, Kent',
           gclass='gt-topbar-text'),
-    style={"backgroundColor": ["var(--gt-olive-deep, #5a663c)"], "paddingTop": ["10px"], "paddingBottom": ["10px"],
+    style={"backgroundColor": ["var(--gt-secondary-dark, #5a663c)"], "paddingTop": ["10px"], "paddingBottom": ["10px"],
            "paddingLeft": ["min(3vw, 20px)"], "paddingRight": ["min(3vw, 20px)"], "marginBlockStart": ["0px"]},
     name='Topbar', alignfull=True)
 
@@ -99,8 +99,8 @@ def icon_link(seed, path, label, href, vb):
     j = json.dumps({"id": i, "tag": "a", "type": "inner", "localId": i, "href": href,
         "dynamicAttributes": [{"name": "aria-label", "value": label}],
         "styleAttributes": {"display": ["inline-flex"], "alignItems": ["center"], "justifyContent": ["center"],
-            "width": ["36px"], "height": ["36px"], "borderRadius": ["50%"], "color": ["var(--gt-ink, #33291f)"],
-            "transition": ["all 0.25s ease"], "color_hover": ["var(--gt-purple, #7e5aa6)"],
+            "width": ["36px"], "height": ["36px"], "borderRadius": ["50%"], "color": ["var(--gt-text, #33291f)"],
+            "transition": ["all 0.25s ease"], "color_hover": ["var(--gt-primary, #7e5aa6)"],
             "backgroundColor_hover": ["rgba(126,90,166,0.08)"]},
         "CSSRender": "1", "metadata": {"name": label}}, ensure_ascii=False).replace('--', D)
     return (f'<!-- wp:greenshift-blocks/element {j} -->\n'
@@ -159,16 +159,16 @@ open('output/header.html', 'w', encoding='utf-8').write(new_hdr)
 print('header: menu swap', n1, '| download->icons', n2, '| wrapper restyle', n3)
 
 # ---------- Footer ----------
-VAR_MUTED = 'var(--gt-muted, #8c8172)'
+VAR_TEXT_MUTED = 'var(--gt-text-muted, #8c8172)'
 def flink(seed, label, href):
     return block(seed, 'a', text=label, extra={"href": href}, html_attrs=f'href="{href}"',
-                 style={"color": [VAR_MUTED], "fontSize": ["14px"], "textDecoration": ["none"],
-                        "color_hover": ["var(--gt-purple, #7e5aa6)"], "transition": ["color 0.2s ease"]})
+                 style={"color": [VAR_TEXT_MUTED], "fontSize": ["14px"], "textDecoration": ["none"],
+                        "color_hover": ["var(--gt-primary, #7e5aa6)"], "transition": ["color 0.2s ease"]})
 
 def fcolhead(seed, label):
     return block(seed, 'div', text=label,
                  style={"fontSize": ["12px"], "fontWeight": ["600"], "letterSpacing": ["1.4px"],
-                        "textTransform": ["uppercase"], "color": ["var(--gt-ink, #33291f)"], "marginBottom": ["1rem"]})
+                        "textTransform": ["uppercase"], "color": ["var(--gt-text, #33291f)"], "marginBottom": ["1rem"]})
 
 logo_json = json.dumps({"id": sid('ftlogoi'), "tag": "img", "localId": sid('ftlogoi'),
     "src": f"{U}/brand-logo.png", "alt": "Marigold & Fern", "originalWidth": 348, "originalHeight": 200,
@@ -179,7 +179,7 @@ logo_img = (f'<!-- wp:greenshift-blocks/element {logo_json} -->\n'
 
 brand_col = block('ftbrand', 'div', inner=logo_img +
     block('ftblurb', 'p', text="Modern apparel &amp; accessories for today's woman. Simple, cozy, beautifully put-together — in Ashford, Kent.",
-          style={"color": [VAR_MUTED], "fontSize": ["14px"], "maxWidth": ["24rem"], "marginBottom": ["0px"]}),
+          style={"color": [VAR_TEXT_MUTED], "fontSize": ["14px"], "maxWidth": ["24rem"], "marginBottom": ["0px"]}),
     style={"display": ["flex"], "flexDirection": ["column"], "alignItems": ["flex-start"]}, name='Brand')
 
 explore_col = block('ftexplore', 'div', inner=
@@ -194,8 +194,8 @@ explore_col = block('ftexplore', 'div', inner=
 visit_col = block('ftvisit', 'div', inner=
     fcolhead('ftvih', 'Visit') +
     block('ftvlines', 'div', inner=
-        block('ftv1', 'div', text='18 Mill Street', style={"color": [VAR_MUTED], "fontSize": ["14px"]}) +
-        block('ftv2', 'div', text='Ashford, Kent TN23 1AA', style={"color": [VAR_MUTED], "fontSize": ["14px"]}) +
+        block('ftv1', 'div', text='18 Mill Street', style={"color": [VAR_TEXT_MUTED], "fontSize": ["14px"]}) +
+        block('ftv2', 'div', text='Ashford, Kent TN23 1AA', style={"color": [VAR_TEXT_MUTED], "fontSize": ["14px"]}) +
         flink('ftv3', '01233 555 0142', 'tel:+441233555042') +
         flink('ftv4', 'hello@example.com', 'mailto:hello@example.com'),
         style={"display": ["flex"], "flexDirection": ["column"], "rowGap": ["0.6rem"]}),
@@ -205,18 +205,18 @@ foot_top = block('fttop', 'div', inner=
     block('ftgrid', 'div', inner=brand_col + explore_col + visit_col,
           gclass='gt-footer-grid', name='Footer Grid'),
     style={"display": ["flex"], "justifyContent": ["center"], "paddingTop": ["3.5rem"], "paddingBottom": ["3rem"],
-           "paddingLeft": ["min(3vw, 20px)"], "paddingRight": ["min(3vw, 20px)"], "backgroundColor": ["var(--gt-cream, #fbf6ec)"],
+           "paddingLeft": ["min(3vw, 20px)"], "paddingRight": ["min(3vw, 20px)"], "backgroundColor": ["var(--gt-surface, #fbf6ec)"],
            "borderTop": ["1px solid rgba(124,139,84,0.15)"], "marginBlockStart": ["0px"]},
     name='Footer Top', alignfull=True)
 
 foot_bottom = block('ftbot', 'div', inner=
     block('ftbotrow', 'div', inner=
-        block('ftcopy', 'div', text='© 2026 Marigold & Fern', style={"fontSize": ["13px"], "color": [VAR_MUTED]}) +
-        block('ftmade', 'div', text='Made with care in Ashford', style={"fontSize": ["13px"], "color": [VAR_MUTED]}),
+        block('ftcopy', 'div', text='© 2026 Marigold & Fern', style={"fontSize": ["13px"], "color": [VAR_TEXT_MUTED]}) +
+        block('ftmade', 'div', text='Made with care in Ashford', style={"fontSize": ["13px"], "color": [VAR_TEXT_MUTED]}),
         style={"maxWidth": ["100%"], "width": ["1290px"], "display": ["flex"], "justifyContent": ["space-between"],
                "flexWrap": ["wrap"], "rowGap": ["0.5rem"], "columnGap": ["1rem"]}, name='Bottom Row'),
     style={"display": ["flex"], "justifyContent": ["center"], "paddingTop": ["1.4rem"], "paddingBottom": ["1.4rem"],
-           "paddingLeft": ["min(3vw, 20px)"], "paddingRight": ["min(3vw, 20px)"], "backgroundColor": ["var(--gt-cream, #fbf6ec)"],
+           "paddingLeft": ["min(3vw, 20px)"], "paddingRight": ["min(3vw, 20px)"], "backgroundColor": ["var(--gt-surface, #fbf6ec)"],
            "borderTop": ["1px solid rgba(124,139,84,0.15)"], "marginBlockStart": ["0px"]},
     name='Footer Bottom', alignfull=True)
 

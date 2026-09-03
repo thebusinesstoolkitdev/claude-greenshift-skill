@@ -250,12 +250,21 @@ fluid type/spacing tokens; button, eyebrow, card, form and screen-reader classes
 layout classes below. Rename the `gt-` prefix per project if you like, just rename it
 consistently.
 
+**Colours are role tokens, not colour names.** `primary` / `primary-dark`, `secondary` /
+`secondary-dark`, `accent`, `surface` / `surface-alt`, `text` / `text-muted`, `focus`. A
+rebrand is then a value change; no generator, class or page mentions a hue. Keep the
+`-text` variants (`accent-text`, `secondary-text`): they exist because the fill colour
+fails AA as text, and a role name must not hide that. Two tints of a role are fine as
+`-light` / `-dark`; at three or more switch to a numeric scale (`secondary-100` …
+`secondary-900`) or the names stop meaning anything. With `--theme`, `primary` can alias
+straight onto the theme's own `brand` preset via `map --apply`.
+
 **Register the tokens with the theme, not beside it.** Upstream prefers the theme's own
 `--wp--preset--*` and `--wp--custom--*` variables to a parallel token set, because two
 systems drift. `push --theme` does both: every variable carries a `kind` (`color`,
 `font-size`, `spacing`, `font-family`, `custom`) and is written as a theme.json preset of
 that kind on the user global-styles record, then the stylebook variable is rewritten to
-alias it, `--gt-purple: var(--wp--preset--color--gt-purple)`. Generators keep the `gt-`
+alias it, `--gt-primary: var(--wp--preset--color--gt-primary)`. Generators keep the `gt-`
 names; the theme owns the values, the site editor shows them, and core blocks can pick
 them from the preset pickers. A token that already exists in the theme under another name
 gets an `alias` instead of a new preset; `stylebook.py map --apply` fills those in wherever

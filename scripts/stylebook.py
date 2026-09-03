@@ -21,7 +21,7 @@ drift. With --theme each `gt-` token becomes a theme.json preset of its `kind`
 (palette, font size, spacing size, or settings.custom) on the user global-styles
 record, and the stylebook variable is rewritten to alias it:
 
-    --gt-purple: var(--wp--preset--color--gt-purple)
+    --gt-primary: var(--wp--preset--color--gt-primary)
 
 Generators keep using the gt- names; the theme owns the values, the site editor
 shows them, and core blocks can pick them from the preset pickers. A token with

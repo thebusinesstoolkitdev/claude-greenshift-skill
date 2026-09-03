@@ -823,6 +823,25 @@ def motion_script(js, plugin_url, names=('animate', 'inView', 'scroll', 'stagger
                         prelude='import { %s } from "%s";' % (', '.join(names), src))
 
 
+def contact_lines(seed, lines, classes=None, gap='0.6rem', prefix=''):
+    """Contact details as an <address> with one link (or text) block per line.
+
+    lines   [(text, href_or_None), ...]  e.g. [('01233 555 0142', 'tel:+441233555042'),
+            ('hello@example.com', 'mailto:hello@example.com'), ('18 Mill Street', None)]
+    Never a paragraph with <br> between links: one block per line keeps each
+    editable and reads correctly to assistive tech.
+    """
+    inner = ''
+    for i, (text, href) in enumerate(lines):
+        if href:
+            inner += block('%s-l%d' % (seed, i), 'a', text=text, attrs={'href': href}, prefix=prefix)
+        else:
+            inner += block('%s-l%d' % (seed, i), 'span', text=text, prefix=prefix)
+    return block(seed, 'address', inner=inner, classes=classes, prefix=prefix,
+                 style={'display': ['flex'], 'flexDirection': ['column'], 'rowGap': [gap],
+                        'fontStyle': ['normal']}, name='Contact details')
+
+
 def has_greenshift_blocks(markup):
     """True when markup carries Greenshift element blocks, which is how to tell a
     Greenlight header (patch surgically) from another theme's (rewrite freely)."""
@@ -905,7 +924,7 @@ def eyebrow(seed, text, tone='', prefix=''):
                  name='Eyebrow', prefix=prefix)
 
 
-def page_wrapper(seed, inner, bg='var(--gt-cream, #fbf6ec)', prefix=''):
+def page_wrapper(seed, inner, bg='var(--gt-surface, #fbf6ec)', prefix=''):
     """Outermost full-width wrapper for a generated page."""
     if BACKEND == 'core':
         return block(seed, 'div', inner=inner, alignfull=True, name='Page Wrapper',

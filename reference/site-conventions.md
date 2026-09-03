@@ -148,3 +148,13 @@ building rather than hunting them afterwards.
 Leave the client something they can edit. A section built as raw markup, a hardcoded list, a
 value duplicated across five pages. Each is a support call. If a change belongs to the
 client, it belongs in a block they can open.
+
+## Contact details
+
+Phone, email and address lines are **one element per line, each its own block**, inside an
+`<address>` (or a `<ul>` when there are three or more), stacked with flex `row-gap`. Never
+a paragraph with `<br>` between links: the break is presentational, a screen reader
+announces one run-on sentence, and the client cannot reorder or remove a line in the
+editor. The converter reproduces whatever the design HTML does, so fix the HTML source
+first when converting; `blocks.contact_lines()` emits the right shape when generating.
+`tel:` links carry the full international number; the visible text keeps the local format.

@@ -211,9 +211,9 @@ def emails(form_id, to_address, business='Our Shop', logo_url='', address='', ho
         'message': (
             '<div style="text-align:center;padding:0.5rem 0">'
             '<div style="font-size:26px;line-height:1.2;margin-bottom:8px;'
-            'font-family:var(--gt-font-heading,Georgia,serif);color:var(--gt-ink,#33291f);'
+            'font-family:var(--gt-font-heading,Georgia,serif);color:var(--gt-text,#33291f);'
             'font-weight:600">Thank you, message received</div>'
-            '<div style="color:var(--gt-muted,#6e6456);font-size:15px">We will get back to you '
+            '<div style="color:var(--gt-text-muted,#6e6456);font-size:15px">We will get back to you '
             f'within a day or two.{f" Need us sooner? Call {phone}." if phone else ""}</div></div>'),
     })
 

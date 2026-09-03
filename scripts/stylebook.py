@@ -340,8 +340,20 @@ def push(path, theme=False):
 
     current = wp.gs_settings()
     payload = {}
-    if spec.get('variables'):
-        incoming = [_stylebook_var(v, aliases) for v in spec['variables']]
+    if spec.get('variables') or replaced:
+        incoming = [_stylebook_var(v, aliases) for v in spec.get('variables') or []]
+        # Display overrides for the Page Builder -> Stylebook "Global Color Presets"
+        # screen. That screen shows the theme's built-in palette defaults merged
+        # with any stored variable whose name matches --wp--preset--color--<slug>;
+        # the user global-styles palette (what actually renders, set by
+        # replace_theme_palette) is NOT read for display, only written on Save.
+        # Without these entries the screen keeps showing the theme defaults even
+        # though the site renders the brand colours.
+        for slug, value in (replaced or {}).items():
+            name = '--wp--preset--color--' + wp_kebab(slug)
+            incoming.append({'variable': name, 'variable_value': value,
+                             'label': slug.replace('-', ' ').title() + ' Color',
+                             'value': 'var(%s)' % name, 'group': 'color'})
         payload['variables'] = _merge_by(current.get('variables'), incoming, 'variable')
     classes = [class_entry(c) for c in spec.get('global_classes') or []]
     derived = elements_as_class(spec)

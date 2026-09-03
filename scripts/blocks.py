@@ -769,7 +769,7 @@ REDUCED_MOTION_GUARD = (
     "if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { return; }")
 
 
-def script_block(js, module=False, srcs=(), respect_reduced_motion=True):
+def script_block(js, module=False, srcs=(), respect_reduced_motion=True, prelude=''):
     """A `wp:html` block carrying a page script (upstream's option C).
 
     Raw `wp:html` output runs as-is, so the script needs no `gspb_block_js`
@@ -778,9 +778,11 @@ def script_block(js, module=False, srcs=(), respect_reduced_motion=True):
     honours `prefers-reduced-motion`; pass respect_reduced_motion=False for
     scripts that are not motion (a filter, a menu toggle).
 
-    js       script body. In module mode it may use `import`.
+    js       script body
     module   emit type="module" (needed for `import`, e.g. Motion)
     srcs     classic <script src> tags emitted first (e.g. GSAP and its plugins)
+    prelude  lines emitted before the guard. `import` declarations must sit at
+             the top level of a module, so they go here, never in `js`
     """
     tags = ''.join('<script src="%s"></script>\n' % s for s in srcs)
     if respect_reduced_motion and not module:
@@ -789,6 +791,8 @@ def script_block(js, module=False, srcs=(), respect_reduced_motion=True):
         body = "if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {\n%s\n}" % js
     else:
         body = js
+    if prelude:
+        body = prelude.rstrip('\n') + '\n' + body
     kind = ' type="module"' if module else ''
     return ('<!-- wp:html -->\n%s<script%s data-wp-block-html="js">\n%s\n</script>\n'
             '<!-- /wp:html -->\n' % (tags, kind, body))
@@ -815,7 +819,8 @@ def motion_script(js, plugin_url, names=('animate', 'inView', 'scroll', 'stagger
     """Motion page script (ES module): imports the named functions from the
     plugin's bundled `motion.js`, then runs `js`."""
     src = plugin_url.rstrip('/') + '/' + MOTION_MODULE
-    return script_block('import { %s } from "%s";\n%s' % (', '.join(names), src, js), module=True)
+    return script_block(js, module=True,
+                        prelude='import { %s } from "%s";' % (', '.join(names), src))
 
 
 def has_greenshift_blocks(markup):

@@ -343,6 +343,21 @@ POST /wp-json/greenshift/v1/css_settings   {"id": <post_id>, "css": ""}
 
 ---
 
+## Page Builder → Stylebook shows "This block has encountered an error and cannot be previewed"
+
+**Cause**. A global class stored without `originalBlock` (and `type`, `attributes`, `tag`,
+`selectors`), which is what `stylebook.py push` wrote before 2026-09-02 and what a hand
+POST of `{"value","label","css"}` still writes. The screen groups classes by `originalBlock`,
+gets the string "undefined", and throws on `"undefined".split("/")[1].charAt(0)`. The front
+end never reads those keys, so the site looks fine while the screen is dead. A list-shaped
+`elements` array (the screen expects an object keyed by tag) is the second candidate.
+
+**Fix**. Re-run `python scripts/stylebook.py push <spec>`; it now normalises every stored
+class to the screen's own shape and moves list-shaped element CSS into a class. Reload the
+Stylebook tab.
+
+---
+
 ## Stylebook update wipes other settings
 
 **Cause**, `POST /greenshift/v1/global_settings` merges only at the top level. Whatever

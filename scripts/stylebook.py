@@ -32,6 +32,7 @@ Merge semantics: each top-level stylebook key you send REPLACES the stored value
 wholesale, and so does each of `settings` / `styles` on the global-styles record,
 so this script always reads, merges locally, then writes.
 """
+import hashlib
 import json
 import re
 import sys
@@ -221,6 +222,45 @@ def _merge_by(existing, incoming, key):
     return merged
 
 
+def class_entry(cls):
+    """A global class in the shape the Stylebook admin screen can render.
+
+    The screen (build/gspbStylebook.js) groups classes by `originalBlock` and
+    derives a heading from it; an entry without that key lands under the string
+    "undefined" and `"undefined".split("/")[1].charAt(0)` throws, which the
+    admin shows as "This block has encountered an error and cannot be
+    previewed". The front end never cared, so the bare {value,label,css} shape
+    this skill used to write rendered fine and broke the screen. This is the
+    exact object the screen builds when a class is added by hand.
+    """
+    name = cls['value']
+    seed = int(hashlib.md5(name.encode()).hexdigest()[:4], 16) % 10000
+    out = {
+        'value': name, 'type': 'global', 'label': cls.get('label') or name,
+        'css': cls.get('css', ''), 'attributes': cls.get('attributes') or {},
+        'originalID': cls.get('originalID') or 'gspbid-%d' % seed,
+        'originalBlock': cls.get('originalBlock') or 'greenshift-blocks/element',
+        'tag': cls.get('tag') or 'div', 'selectors': cls.get('selectors') or [],
+    }
+    for k, v in cls.items():          # keep anything the UI added later
+        out.setdefault(k, v)
+    return out
+
+
+def elements_as_class(spec, prefix=None):
+    """The screen models `elements` as an object keyed by tag (h1..h5, p,
+    button, bodybg) with styleAttributes it regenerates CSS from. Free-form
+    element CSS (`body h1,body h2{...}`, focus rings, reduced-motion) does not
+    fit that model and is emitted verbatim as a class instead, which the front
+    end renders identically. Returns the class entry, or None."""
+    rules = [e.get('css', '') for e in (spec.get('elements') or []) if isinstance(e, dict) and e.get('css')]
+    if not rules or isinstance(spec.get('elements'), dict):
+        return None
+    prefix = prefix or (spec.get('global_classes') or [{'value': 'gt-x'}])[0]['value'].split('-')[0]
+    return {'value': '%s-elements' % prefix, 'label': '%s-elements (base element styles)' % prefix,
+            'css': ''.join(rules)}
+
+
 def _stylebook_var(var, aliases):
     """The spec entry in the shape Greenshift stores, minus this script's own keys."""
     out = {k: v for k, v in var.items() if k not in ('kind', 'alias')}
@@ -242,11 +282,17 @@ def push(path, theme=False):
     if spec.get('variables'):
         incoming = [_stylebook_var(v, aliases) for v in spec['variables']]
         payload['variables'] = _merge_by(current.get('variables'), incoming, 'variable')
-    if spec.get('global_classes'):
-        payload['global_classes'] = _merge_by(current.get('global_classes'),
-                                              spec['global_classes'], 'value')
-    if spec.get('elements'):
-        payload['elements'] = spec['elements']   # element styles are a full set, not a merge
+    classes = [class_entry(c) for c in spec.get('global_classes') or []]
+    derived = elements_as_class(spec)
+    if derived:
+        classes.insert(0, class_entry(derived))   # base element styles print first
+    if classes:
+        # existing entries are normalised too, so a screen broken by an older
+        # push is repaired by the next one
+        existing = [class_entry(c) for c in current.get('global_classes') or []]
+        payload['global_classes'] = _merge_by(existing, classes, 'value')
+    if isinstance(spec.get('elements'), dict):
+        payload['elements'] = spec['elements']   # the screen's own keyed shape, passed through
     if spec.get('colours'):
         payload['colours'] = spec['colours']
     wp.post('greenshift/v1/global_settings', payload)
@@ -286,6 +332,9 @@ def remove(path):
     spec = load(path)
     names = {v['variable'] for v in spec.get('variables') or []}
     classes = {c['value'] for c in spec.get('global_classes') or []}
+    derived = elements_as_class(spec)
+    if derived:
+        classes.add(derived['value'])
     current = wp.gs_settings()
     payload = {
         'variables': [v for v in current.get('variables') or []

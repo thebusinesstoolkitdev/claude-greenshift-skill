@@ -218,8 +218,16 @@ system. Build it before generating pages so pages can simply reference classes.
 | --- | --- | --- |
 | `variables` | `{"name","variable":"--x","variable_value"}` | `body { --x: … }` |
 | `colours` | flat array of hex | editor palette, `--gs-color0..n` |
-| `global_classes` | `{"value","label","css"}` | the CSS string verbatim (media queries allowed) |
-| `elements` | `{"selector","css","admincss"}` | element styles; **prefix with `body`** or theme rules that load later win |
+| `global_classes` | `{"value","label","css"}` in the spec; `stylebook.py` fills in `type`, `attributes`, `originalID`, `originalBlock`, `tag`, `selectors` | the CSS string verbatim (media queries allowed) |
+| `elements` | list of `{"selector","css"}` in the spec, emitted as one `<prefix>-elements` class | element styles; **prefix with `body`** or theme rules that load later win |
+
+**The Stylebook admin screen needs the full class shape.** It groups classes by
+`originalBlock` and builds a heading from it; an entry without the key crashes the whole
+screen with "This block has encountered an error and cannot be previewed", while the front
+end renders the same entry fine. `stylebook.py push` writes the shape the screen itself
+creates and repairs existing entries on the next push. Its `elements` model is an object
+keyed by tag with `styleAttributes` it regenerates CSS from, which free-form element CSS
+does not fit, so the spec's `elements` list becomes a class and renders identically.
 
 Merge semantics: each key you send **replaces** the stored array. Always read, merge
 locally, then write, `WP.gs_upsert_classes()` and `scripts/stylebook.py push` do this.

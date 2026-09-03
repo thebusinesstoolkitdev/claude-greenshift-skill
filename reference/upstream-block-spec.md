@@ -44,6 +44,13 @@ stylemanager, which only the editor compiles. This skill routes it to the styleb
 (`style_manager()` refuses `custom_css` on a template target), because a template part is
 site-wide anyway. On page targets both agree: it goes into `_gspb_post_css`.
 
+**GSAP loading.** Upstream imports GSAP as an ES module from
+`{{PLUGIN_URL}}/libs/motion/gsap.js`. On the Greenlight build (`gl-page-builder`) that path
+does not exist and the bundled GSAP is a UMD file that throws when imported as a module.
+This skill loads it with classic script tags from `libs/gsap/`, reads the plugin folder
+from the site, and imports only Motion (`libs/motion/motion.js`) as a module.
+`blocks.gsap_script()` and `blocks.motion_script()` carry the working recipe.
+
 ## Retired divergences
 
 **A `gt-` token set alongside the theme's** (reconciled 2026-09-02). Tokens now carry a

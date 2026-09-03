@@ -525,6 +525,55 @@ Client-side filtering suits a curated set. Only reach for posts + categories wit
 Greenshift query grid when the client needs to add items themselves, and WooCommerce only
 when they actually sell online. A custom post type is rarely the right first step.
 
+## Animation
+
+Upstream's pointers are in `instructions/scripts.md` and `validate-scripts.md`: scripts
+ride on a block as `customJs`, the front end reads them from the `gspb_block_js` option
+(so REST-inserted scripts need option B or C above), and **never hide an element with
+CSS and reveal it with a script**, because the editor canvas runs no scripts and the
+element would vanish there. Set the hidden start state inside the script, right before
+animating. Prefer CSS transitions for hover and small entrances; reach for a library for
+scroll-driven and sequenced motion.
+
+Two things upstream gets wrong for this theme, both verified on gl-page-builder 3.3.7:
+
+- The plugin folder is `gl-page-builder`, not `greenshift-animation-and-page-builder-blocks`.
+  Read it with `WP.greenshift_plugin_url()`; a guessed path 404s silently.
+- `import gsap from '{{PLUGIN_URL}}/libs/motion/gsap.js'` fails twice: that file does not
+  exist, and the bundled GSAP is a classic UMD build that throws when imported as a module.
+
+What the plugin ships, relative to its folder: `libs/gsap/gsap.min.js` (GSAP 3.12.2, global
+`gsap`) with `ScrollTrigger`, `ScrollToPlugin`, `Flip`, `SplitText`, `TextPlugin` and
+`Observer` beside it, and Motion 12 as an ES module at `libs/motion/motion.js`. Nothing
+else to load from a CDN; the client already pays for these.
+
+```python
+url = wp.greenshift_plugin_url()
+page += blocks.gsap_script("""
+  gsap.utils.toArray('.ketup-card').forEach(card => {
+    gsap.set(card, {opacity: 0, y: 24});
+    gsap.to(card, {opacity: 1, y: 0, duration: 0.6, ease: 'power2.out',
+                   scrollTrigger: {trigger: card, start: 'top 85%'}});
+  });
+""", url)                                            # classic tags + registerPlugin, last in the page
+page += blocks.motion_script("""
+  inView('.ketup-stat', ({target}) => animate(target, {opacity: [0, 1], y: [16, 0]}, {duration: 0.5}));
+""", url)                                            # ES module import
+```
+
+Both helpers wrap the body in a `prefers-reduced-motion` guard, so users who asked for
+less motion get the resting state immediately. Keep that: it is also what the stylebook's
+reduced-motion rule promises for CSS.
+
+Greenshift blocks also carry a native `animation` attribute (the theme's mobile panel
+uses `{"type":"clip-down","duration":800,"onclass_active":true}`); it is undocumented
+upstream, so copy a working shape from the theme rather than inventing one.
+
+Verification is by the front end in a real browser. The in-app browser pane never advances
+animation frames, so tweens sit at their first frame there; `ScrollTrigger` callbacks and
+console errors are observable, tween progress is not. `reference/site-conventions.md`
+lists the other things headless rendering never does.
+
 ## Accessibility and agent readiness
 
 Treat these as build requirements, not a later pass:

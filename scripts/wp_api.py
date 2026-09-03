@@ -296,6 +296,22 @@ class WP:
             raise ValueError('set_template_part needs content')
         return self.post(f'wp/v2/template-parts/{theme}//{slug}', {'content': content})
 
+    def greenshift_plugin_url(self):
+        """Site-relative URL of the Greenshift plugin folder, read from the site.
+
+        The folder is not fixed: WPsoul ships the same plugin as
+        `greenshift-animation-and-page-builder-blocks` and, rebranded for the
+        Greenlight theme, as `gl-page-builder`. Upstream's `{{PLUGIN_URL}}`
+        placeholder is only resolved for option-stored scripts, so anything in a
+        `wp:html` block needs the real path, and guessing it 404s the library.
+        """
+        for p in self.get('wp/v2/plugins'):
+            folder = p['plugin'].split('/')[0]
+            if folder in ('gl-page-builder', 'greenshift-animation-and-page-builder-blocks') \
+                    or 'greenshift' in folder:
+                return '/wp-content/plugins/' + folder
+        raise LookupError('no Greenshift / GL page builder plugin installed')
+
     # ---------- global styles (theme.json user record) ----------
 
     def global_styles_id(self):

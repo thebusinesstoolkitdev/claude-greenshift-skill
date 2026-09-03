@@ -70,6 +70,22 @@ block's own responsive array. `verify.py` cannot see this; a viewport sweep with
 
 ---
 
+## Animation script runs in the editor preview but not on the site, or 404s
+
+**Cause**. One of three: the script sits in `customJs` on a REST-inserted block and the
+`gspb_block_js` option was never written; the `{{PLUGIN_URL}}` placeholder was left in a
+`wp:html` block, which PHP never processes; or the GSAP path was taken from upstream
+(`libs/motion/gsap.js`), which does not exist on the Greenlight build, whose folder is
+`gl-page-builder`. Importing the bundled `gsap.min.js` as a module also throws
+("Cannot set property window").
+
+**Fix**. Put page scripts in a `wp:html` block at the end of the page
+(`blocks.script_block()`), get the folder from `WP.greenshift_plugin_url()`, and load GSAP
+with classic script tags (`blocks.gsap_script()`). Motion is the one library there that is
+a real ES module (`blocks.motion_script()`).
+
+---
+
 ## Pseudo-element rules in a local class do nothing
 
 The renderer emits `dynamicGClasses[].css` verbatim, but a rule carrying `content:""`

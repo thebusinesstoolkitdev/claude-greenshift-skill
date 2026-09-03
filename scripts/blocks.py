@@ -748,6 +748,76 @@ def style_manager(seed, classes=None, custom_css=None, custom_js=None, name=None
     return open_c + '\n<div%s></div>\n' % class_attr + '<!-- /wp:greenshift-blocks/element -->\n'
 
 
+# Libraries the Greenshift plugin ships, relative to its folder. Verified on
+# gl-page-builder 3.3.7: GSAP 3.12.2 and its plugins are classic UMD files
+# (global `gsap`, `ScrollTrigger`, ...), Motion 12 is an ES module. Upstream's
+# `import gsap from '{{PLUGIN_URL}}/libs/motion/gsap.js'` matches neither the
+# path nor the format on this build: that file does not exist, and importing the
+# UMD file as a module throws. Load GSAP with a classic script tag.
+GSAP_CORE = 'libs/gsap/gsap.min.js'
+GSAP_PLUGINS = {
+    'ScrollTrigger': 'libs/gsap/ScrollTrigger.min.js',
+    'ScrollToPlugin': 'libs/gsap/ScrollToPlugin.min.js',
+    'Flip': 'libs/gsap/Flip.min.js',
+    'SplitText': 'libs/gsap/SplitText.min.js',
+    'TextPlugin': 'libs/gsap/TextPlugin.min.js',
+    'Observer': 'libs/gsap/Observer.min.js',
+}
+MOTION_MODULE = 'libs/motion/motion.js'
+
+REDUCED_MOTION_GUARD = (
+    "if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { return; }")
+
+
+def script_block(js, module=False, srcs=(), respect_reduced_motion=True):
+    """A `wp:html` block carrying a page script (upstream's option C).
+
+    Raw `wp:html` output runs as-is, so the script needs no `gspb_block_js`
+    entry and no block id. Put it last in the page content: by then every
+    element it addresses is in the DOM. The body is wrapped so an early return
+    honours `prefers-reduced-motion`; pass respect_reduced_motion=False for
+    scripts that are not motion (a filter, a menu toggle).
+
+    js       script body. In module mode it may use `import`.
+    module   emit type="module" (needed for `import`, e.g. Motion)
+    srcs     classic <script src> tags emitted first (e.g. GSAP and its plugins)
+    """
+    tags = ''.join('<script src="%s"></script>\n' % s for s in srcs)
+    if respect_reduced_motion and not module:
+        body = '(function(){\n%s\n%s\n})();' % (REDUCED_MOTION_GUARD, js)
+    elif respect_reduced_motion:
+        body = "if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {\n%s\n}" % js
+    else:
+        body = js
+    kind = ' type="module"' if module else ''
+    return ('<!-- wp:html -->\n%s<script%s data-wp-block-html="js">\n%s\n</script>\n'
+            '<!-- /wp:html -->\n' % (tags, kind, body))
+
+
+def gsap_script(js, plugin_url, plugins=('ScrollTrigger',)):
+    """GSAP page script: loads the plugin's bundled GSAP and the named GSAP
+    plugins with classic script tags, registers them, then runs `js` with the
+    globals `gsap`, `ScrollTrigger` and so on available.
+
+    plugin_url  from WP.greenshift_plugin_url(); never guess it
+    plugins     names from GSAP_PLUGINS
+    """
+    unknown = [p for p in plugins if p not in GSAP_PLUGINS]
+    if unknown:
+        raise ValueError('unknown GSAP plugins %s; bundled: %s' % (unknown, sorted(GSAP_PLUGINS)))
+    srcs = [plugin_url.rstrip('/') + '/' + GSAP_CORE] + \
+           [plugin_url.rstrip('/') + '/' + GSAP_PLUGINS[p] for p in plugins]
+    register = ('gsap.registerPlugin(%s);\n' % ', '.join(plugins)) if plugins else ''
+    return script_block(register + js, srcs=srcs)
+
+
+def motion_script(js, plugin_url, names=('animate', 'inView', 'scroll', 'stagger')):
+    """Motion page script (ES module): imports the named functions from the
+    plugin's bundled `motion.js`, then runs `js`."""
+    src = plugin_url.rstrip('/') + '/' + MOTION_MODULE
+    return script_block('import { %s } from "%s";\n%s' % (', '.join(names), src, js), module=True)
+
+
 def has_greenshift_blocks(markup):
     """True when markup carries Greenshift element blocks, which is how to tell a
     Greenlight header (patch surgically) from another theme's (rewrite freely)."""

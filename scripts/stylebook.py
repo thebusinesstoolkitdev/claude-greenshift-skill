@@ -90,10 +90,20 @@ def wp_kebab(text):
     return '-'.join(w.lower() for w in words)
 
 
+def theme_slugs(var):
+    """Theme palette slots a colour token replaces (`theme_slug`: str or list)."""
+    slugs = var.get('theme_slug')
+    if not slugs:
+        return []
+    return [slugs] if isinstance(slugs, str) else list(slugs)
+
+
 def alias_var(var):
     """The theme variable this token points at once registered (or its `alias`)."""
     if var.get('alias'):
         return var['alias']
+    if theme_slugs(var):
+        return '--wp--preset--color--' + wp_kebab(theme_slugs(var)[0])
     kind, name = kind_of(var), var_name(var)
     if kind in PRESETS:
         return PRESETS[kind][2] + wp_kebab(name)
@@ -169,6 +179,9 @@ def register_presets(wp, spec, remove=False):
         if var.get('alias'):
             aliases[var['variable']] = var['alias']  # points at an existing theme var
             continue
+        if theme_slugs(var):
+            aliases[var['variable']] = alias_var(var)  # replaces a theme slot instead
+            continue
         kind, name = kind_of(var), var_name(var)
         value = var.get('variable_value', var.get('value', ''))
         if kind in PRESETS:
@@ -205,6 +218,53 @@ def register_presets(wp, spec, remove=False):
             settings.pop('custom', None)
     wp.set_global_styles(settings=settings)
     return aliases
+
+
+def replace_theme_palette(wp, spec, restore=False):
+    """Write the token colours into the THEME palette slots on the user record.
+
+    The Stylebook's "Global Color Presets", the editor's colour pickers and the
+    theme's own CSS (`var(--wp--preset--color--brand)`) all read the palette at
+    the theme origin. A user-level `palette.theme` list overrides it wholesale,
+    which is how the Greenlight onboarding sets its brand colour. So: start from
+    the list already on the user record if the site has one (an onboarding
+    override, other slots the client changed), else the theme's own; swap the
+    `color` of every slot a token names in `theme_slug`; write the full list
+    back. Slots no token names keep their value, and slot slugs never change, so
+    nothing in the theme dereferences a missing variable. There is no automatic
+    restore: the previous values are printed so they can be put back by hand.
+    """
+    bound = {}
+    for var in spec.get('variables') or []:
+        for slug in theme_slugs(var):
+            bound[slug] = var.get('variable_value', var.get('value', ''))
+    if not bound or restore:
+        return {}
+    record = wp.global_styles()
+    settings = dict(record.get('settings') or {})
+    color = settings.setdefault('color', {})
+    if not isinstance(color.get('palette'), dict):
+        color['palette'] = {}
+    base = color['palette'].get('theme')
+    if not base:
+        theme = wp.get('wp/v2/themes?status=active')[0]['stylesheet']
+        data = wp.get('wp/v2/global-styles/themes/%s' % theme)
+        palette = (data.get('settings') or {}).get('color', {}).get('palette', {})
+        base = list(palette.get('theme') or []) if isinstance(palette, dict) else list(palette or [])
+    unknown = sorted(set(bound) - {c['slug'] for c in base})
+    if unknown:
+        raise SystemExit('the theme palette has no slot(s) %s; its slots are %s'
+                         % (unknown, sorted(c['slug'] for c in base)))
+    new_list = []
+    for c in base:
+        entry = dict(c)
+        if c['slug'] in bound and entry.get('color') != bound[c['slug']]:
+            print('  palette slot %-14s %s -> %s' % (c['slug'], entry.get('color'), bound[c['slug']]))
+            entry['color'] = bound[c['slug']]
+        new_list.append(entry)
+    color['palette']['theme'] = new_list
+    wp.set_global_styles(settings=settings)
+    return bound
 
 
 # ---------------------------------------------------------------------------
@@ -276,6 +336,7 @@ def push(path, theme=False):
     wp = WP()
     spec = load(path)
     aliases = register_presets(wp, spec) if theme else {}
+    replaced = replace_theme_palette(wp, spec) if theme else {}
 
     current = wp.gs_settings()
     payload = {}
@@ -303,6 +364,8 @@ def push(path, theme=False):
              len(after.get('elements') or []), len(after.get('colours') or [])))
     if theme:
         print('theme presets registered: %d, gt- variables aliased onto them' % len(aliases))
+        if replaced:
+            print('theme palette slots replaced: %s' % ', '.join('%s=%s' % kv for kv in sorted(replaced.items())))
 
 
 def push_core(path, theme=False):
@@ -344,6 +407,9 @@ def remove(path):
     }
     wp.post('greenshift/v1/global_settings', payload)
     register_presets(wp, spec, remove=True)
+    if any(theme_slugs(v) for v in spec.get('variables') or []):
+        print('theme palette slots were left as pushed; set them back by hand in '
+              'Appearance -> Editor -> Styles -> Colours if the previous values are wanted')
     print('removed %d variables, %d classes, and their theme presets'
           % (len(names), len(classes)))
 

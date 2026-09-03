@@ -1,5 +1,5 @@
 {
- "_comment": "Starter design system for the Greenshift stylebook. Colours are ROLE tokens (primary, secondary, accent, surface, text), so a rebrand is a value change, not a rename: swap the hex values and fonts, keep the names. The -text variants (accent-text, secondary-text) exist because the fill colour fails contrast as text; keep them. a `kind` (color, font-size, spacing, font-family, custom); `stylebook.py push --theme` uses it to register the token as a theme.json preset and alias the gt- name onto it, and an optional `alias` names an existing theme variable to point at instead.",
+ "_comment": "Starter design system for the Greenshift stylebook. Colours are ROLE tokens (primary, secondary, accent, surface, text), so a rebrand is a value change, not a rename: swap the hex values and fonts, keep the names. The -text variants (accent-text, secondary-text) exist because the fill colour fails contrast as text; keep them. a `kind` (color, font-size, spacing, font-family, custom); `stylebook.py push --theme` uses it to register the token as a theme.json preset and alias the gt- name onto it, and an optional `alias` names an existing theme variable to point at instead. A colour token may carry `theme_slug` (one or more Greenlight palette slots such as brand, background, textcolor, heading, lightgrey, card-base, card-text); `push --theme` then writes its value into those slots on the user global-styles record, so the Stylebook Global Color Presets, the editor pickers and the theme CSS all show the brand instead of the theme default.",
  "variables": [
   {
    "name": "gt-surface",
@@ -8,7 +8,10 @@
    "label": "gt-surface",
    "value": "var(--gt-surface)",
    "group": "imported",
-   "kind": "color"
+   "kind": "color",
+   "theme_slug": [
+    "background"
+   ]
   },
   {
    "name": "gt-surface-alt",
@@ -17,7 +20,10 @@
    "label": "gt-surface-alt",
    "value": "var(--gt-surface-alt)",
    "group": "imported",
-   "kind": "color"
+   "kind": "color",
+   "theme_slug": [
+    "card-base"
+   ]
   },
   {
    "name": "gt-text",
@@ -26,7 +32,12 @@
    "label": "gt-text",
    "value": "var(--gt-text)",
    "group": "imported",
-   "kind": "color"
+   "kind": "color",
+   "theme_slug": [
+    "textcolor",
+    "heading",
+    "card-text"
+   ]
   },
   {
    "name": "gt-text-muted",
@@ -35,7 +46,10 @@
    "label": "gt-text-muted",
    "value": "var(--gt-text-muted)",
    "group": "imported",
-   "kind": "color"
+   "kind": "color",
+   "theme_slug": [
+    "lightgrey"
+   ]
   },
   {
    "name": "gt-primary",
@@ -44,7 +58,10 @@
    "label": "gt-primary",
    "value": "var(--gt-primary)",
    "group": "imported",
-   "kind": "color"
+   "kind": "color",
+   "theme_slug": [
+    "brand"
+   ]
   },
   {
    "name": "gt-primary-dark",

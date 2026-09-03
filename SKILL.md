@@ -284,6 +284,19 @@ python scripts/stylebook.py push reference/starter-tokens.json --theme   # prese
 python scripts/stylebook.py remove reference/starter-tokens.json         # retire the lot
 ```
 
+**The theme's own palette is replaceable too.** The Stylebook's "Global Color Presets",
+the editor pickers and Greenlight's own CSS (`var(--wp--preset--color--brand)`) read the
+palette at the *theme* origin, which custom presets never touch. A colour token that
+carries `theme_slug` (`"theme_slug": ["brand"]`, or several slots) has its value written
+into those slots on the user global-styles record by `push --theme`, the way Greenlight's
+onboarding sets its brand colour. Slot slugs never change, so nothing in the theme
+dereferences a missing variable, and unmapped slots keep the theme value. The starter
+tokens bind `primary` → `brand`, `surface` → `background`, `surface-alt` → `card-base`,
+`text` → `textcolor`, `heading`, `card-text`, `text-muted` → `lightgrey`. If the site already
+overrides the theme palette (Greenlight's onboarding does), that list is the base and only
+the bound slots change. `push` prints every slot it changes; `remove` leaves them, put the
+old values back in Appearance → Editor → Styles if wanted.
+
 Two things WordPress does on the way that will bite a hand-written alias: preset slugs and
 `settings.custom` keys are kebab-cased before the variable is emitted, so `gt-h1` is
 `--wp--preset--font-size--gt-h-1`, and each of `settings` and `styles` on the record is

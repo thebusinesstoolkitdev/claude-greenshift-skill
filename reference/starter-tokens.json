@@ -1,5 +1,5 @@
 {
- "_comment": "Starter design system for the Greenshift stylebook. Colours are ROLE tokens (primary, secondary, accent, surface, text), so a rebrand is a value change, not a rename: swap the hex values and fonts, keep the names. The -text variants (accent-text, secondary-text) exist because the fill colour fails contrast as text; keep them. a `kind` (color, font-size, spacing, font-family, custom); `stylebook.py push --theme` uses it to register the token as a theme.json preset and alias the gt- name onto it, and an optional `alias` names an existing theme variable to point at instead. A colour token may carry `theme_slug` (one or more Greenlight palette slots such as brand, background, textcolor, heading, lightgrey, card-base, card-text); `push --theme` then writes its value into those slots on the user global-styles record, so the Stylebook Global Color Presets, the editor pickers and the theme CSS all show the brand instead of the theme default.",
+ "_comment": "Starter design system for the Greenshift stylebook. Colours are ROLE tokens (primary, secondary, accent, surface, text), so a rebrand is a value change, not a rename: swap the hex values and fonts, keep the names. The -text variants (accent-text, secondary-text) exist because the fill colour fails contrast as text; keep them. a `kind` (color, font-size, spacing, font-family, custom); `stylebook.py push --theme` uses it to register the token as a theme.json preset and alias the gt- name onto it, and an optional `alias` names an existing theme variable to point at instead. A colour token may carry `theme_slug` (one or more Greenlight palette slots such as brand, background, textcolor, heading, lightgrey, card-base, card-text); `push --theme` then writes its value into those slots on the user global-styles record, so the Stylebook Global Color Presets, the editor pickers and the theme CSS all show the brand instead of the theme default. A base layer ships in `elements`: box-sizing, smooth scroll (reduced-motion aware), body full-height + overflow-x clip, link colour and an external-link arrow indicator, paragraph rhythm. Heading look-alike classes (.h1-.h6) and a screen-reader-only .hidden-accessible are in global_classes. Values live as tokens; these are the rules that cannot be drawn in a design and belong site-wide.",
  "variables": [
   {
    "name": "gt-surface",
@@ -145,6 +145,15 @@
    "kind": "custom"
   },
   {
+   "name": "gt-transition",
+   "variable": "--gt-transition",
+   "variable_value": "0.25s ease",
+   "label": "gt-transition",
+   "value": "var(--gt-transition)",
+   "group": "imported",
+   "kind": "custom"
+  },
+  {
    "name": "gt-font-heading",
    "variable": "--gt-font-heading",
    "variable_value": "'Fraunces', Georgia, serif",
@@ -186,6 +195,24 @@
    "variable_value": "clamp(1.15rem, 1.6vw, 1.375rem)",
    "label": "gt-h3",
    "value": "var(--gt-h3)",
+   "group": "imported",
+   "kind": "font-size"
+  },
+  {
+   "name": "gt-h4",
+   "variable": "--gt-h4",
+   "variable_value": "1.1rem",
+   "label": "gt-h4",
+   "value": "var(--gt-h4)",
+   "group": "imported",
+   "kind": "font-size"
+  },
+  {
+   "name": "gt-h5",
+   "variable": "--gt-h5",
+   "variable_value": "1rem",
+   "label": "gt-h5",
+   "value": "var(--gt-h5)",
    "group": "imported",
    "kind": "font-size"
   },
@@ -265,6 +292,11 @@
  ],
  "elements": [
   {
+   "selector": "base",
+   "css": "*,*::before,*::after{box-sizing:border-box;}:root{interpolate-size:allow-keywords;}html{scroll-behavior:smooth;}html:focus-within{scroll-behavior:auto;}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto;}}",
+   "admincss": ""
+  },
+  {
    "selector": "h1",
    "css": "body h1{font-family:var(--gt-font-heading);font-size:var(--gt-h1);font-weight:600;line-height:1.08;letter-spacing:-0.01em;color:var(--gt-text,#33291f);text-wrap:balance;}",
    "admincss": ".editor-styles-wrapper h1{font-family:var(--gt-font-heading);font-size:var(--gt-h1);font-weight:600;line-height:1.08;letter-spacing:-0.01em;color:var(--gt-text,#33291f);}"
@@ -281,12 +313,12 @@
   },
   {
    "selector": "h4",
-   "css": "body h4{font-family:var(--gt-font-heading);font-size:1.1rem;font-weight:600;line-height:1.35;color:var(--gt-text,#33291f);}",
+   "css": "body h4{font-family:var(--gt-font-heading);font-size:var(--gt-h4,1.1rem);font-weight:600;line-height:1.35;color:var(--gt-text,#33291f);}",
    "admincss": ".editor-styles-wrapper h4{font-family:var(--gt-font-heading);font-size:1.1rem;font-weight:600;line-height:1.35;color:var(--gt-text,#33291f);}"
   },
   {
    "selector": "h5",
-   "css": "body h5{font-family:var(--gt-font-body);font-size:1rem;font-weight:600;line-height:1.4;color:var(--gt-text,#33291f);}",
+   "css": "body h5{font-family:var(--gt-font-body);font-size:var(--gt-h5,1rem);font-weight:600;line-height:1.4;color:var(--gt-text,#33291f);}",
    "admincss": ".editor-styles-wrapper h5{font-family:var(--gt-font-body);font-size:1rem;font-weight:600;line-height:1.4;color:var(--gt-text,#33291f);}"
   },
   {
@@ -296,8 +328,18 @@
   },
   {
    "selector": "body",
-   "css": "html body{font-family:var(--gt-font-body);font-size:var(--gt-body);line-height:1.65;color:var(--gt-text,#33291f);}",
+   "css": "html body{font-family:var(--gt-font-body);font-size:var(--gt-body);line-height:1.65;color:var(--gt-text,#33291f);min-block-size:100svh;overflow-x:clip;}",
    "admincss": ".editor-styles-wrapper{font-family:var(--gt-font-body);font-size:var(--gt-body);line-height:1.65;color:var(--gt-text,#33291f);}"
+  },
+  {
+   "selector": "a",
+   "css": "body a:where(:not([class*=\"btn\"])){color:var(--gt-primary,#7e5aa6);text-underline-offset:0.15em;transition:color var(--gt-transition,0.2s ease);}@media(hover:hover) and (pointer:fine){body a:where(:not([class*=\"btn\"])):hover{color:var(--gt-primary-dark,#6a4a8f);}}body a[target=\"_blank\"]:where(:not(:has(img,figure,picture,svg)))::after{content:\"↗︎\" / \"\";font-size:0.8em;line-height:1;margin-inline-start:0.15em;color:currentColor;white-space:nowrap;}",
+   "admincss": ""
+  },
+  {
+   "selector": "p",
+   "css": "body p{line-height:calc(1ex + 1.1em);text-wrap:pretty;}",
+   "admincss": ""
   }
  ],
  "global_classes": [
@@ -484,6 +526,41 @@
    "value": "gt-cd-label",
    "label": "gt-cd-label",
    "css": ".gt-cd-label{font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--gt-text-muted,#555);margin-top:.35rem;}"
+  },
+  {
+   "value": "hidden-accessible",
+   "label": "hidden-accessible (screen-reader only)",
+   "css": ".hidden-accessible{position:absolute !important;inline-size:1px !important;block-size:1px !important;padding:0;margin:-1px;overflow:hidden;clip-path:inset(100%);white-space:nowrap;border:0;}"
+  },
+  {
+   "value": "h1",
+   "label": "h1 (heading look, any tag)",
+   "css": "body .h1{font-family:var(--gt-font-heading);font-size:var(--gt-h1);font-weight:600;line-height:1.08;color:var(--gt-text,#33291f);text-wrap:balance;}"
+  },
+  {
+   "value": "h2",
+   "label": "h2 (heading look, any tag)",
+   "css": "body .h2{font-family:var(--gt-font-heading);font-size:var(--gt-h2);font-weight:600;line-height:1.15;color:var(--gt-text,#33291f);text-wrap:balance;}"
+  },
+  {
+   "value": "h3",
+   "label": "h3 (heading look, any tag)",
+   "css": "body .h3{font-family:var(--gt-font-heading);font-size:var(--gt-h3);font-weight:600;line-height:1.3;color:var(--gt-text,#33291f);text-wrap:balance;}"
+  },
+  {
+   "value": "h4",
+   "label": "h4 (heading look, any tag)",
+   "css": "body .h4{font-family:var(--gt-font-heading);font-size:var(--gt-h4);font-weight:600;line-height:1.35;color:var(--gt-text,#33291f);text-wrap:balance;}"
+  },
+  {
+   "value": "h5",
+   "label": "h5 (heading look, any tag)",
+   "css": "body .h5{font-family:var(--gt-font-body);font-size:var(--gt-h5);font-weight:600;line-height:1.4;color:var(--gt-text,#33291f);text-wrap:balance;}"
+  },
+  {
+   "value": "h6",
+   "label": "h6 (heading look, any tag)",
+   "css": "body .h6{font-family:var(--gt-font-body);font-size:var(--gt-small);font-weight:600;line-height:1.4;color:var(--gt-text,#33291f);text-wrap:balance;}"
   }
  ]
 }

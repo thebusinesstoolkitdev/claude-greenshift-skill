@@ -254,8 +254,12 @@ The starter system comes out around 9KB of CSS. That record is native to FSE the
 survives theme updates, which makes it the closest equivalent to a GreenLight global class.
 
 `reference/starter-tokens.json` is a complete working system: colour, radius, focus-ring and
-fluid type/spacing tokens; button, eyebrow, card, form and screen-reader classes; and the
-layout classes below. Rename the `gt-` prefix per project if you like, just rename it
+fluid type/spacing tokens; button, eyebrow, card, form and screen-reader classes; the
+layout classes below; and a **base layer** in `elements` (box-sizing, reduced-motion-aware
+smooth scroll, body full-height + `overflow-x:clip`, link colour and an external-link arrow
+indicator on text links only, paragraph rhythm) plus `.h1`-`.h6` heading look-alike classes
+and a `.hidden-accessible` screen-reader-only class. Those are the global rules that cannot
+be drawn in a design and belong site-wide, authored once here, not per block. Rename the `gt-` prefix per project if you like, just rename it
 consistently.
 
 **Colours are role tokens, not colour names.** `primary` / `primary-dark`, `secondary` /

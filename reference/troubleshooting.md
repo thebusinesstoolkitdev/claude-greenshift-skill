@@ -51,6 +51,17 @@ gl-page-builder 3.3.7, `["1fr 1fr 1fr", "1fr 1fr", "1fr"]` compiles to a desktop
 
 ---
 
+## A CSS `\XXXX` unicode escape renders as literal text
+
+**Cause**. GreenLight's `css_settings` store (stylebook CSS and `_gspb_post_css`) strips the
+backslash from CSS unicode escapes, so `content:"97"` reaches the page as the literal
+string `2197`, not the character. Verified on a live push.
+
+**Fix**. Put the actual character in the CSS, not the escape: `content:"↗︎"` (the
+starter's external-link indicator does this). The literal survives JSON, storage and render.
+
+---
+
 ## A wp:html script throws "Invalid or unexpected token" at parse time
 
 **Cause**. The script contains `&` (usually `&&`). WordPress encodes it to `&#038;` inside a

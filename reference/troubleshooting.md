@@ -15,7 +15,7 @@ _Greenshift backend only._
 **Symptom**. Page structure is right, content is right, everything is unstyled. Block
 `gsbp-xxxxxxx` classes are in the HTML but no matching CSS rules anywhere.
 
-**Cause**. Greenshift normally compiles block CSS *in the editor* on save. Blocks pushed
+**Cause**. GreenLight normally compiles block CSS *in the editor* on save. Blocks pushed
 over the REST API never pass through the editor, so nothing compiles them.
 
 **Fix**. Add `"CSSRender": true` to every block that carries `styleAttributes`. This tells
@@ -34,7 +34,7 @@ _Greenshift backend only._
 value. A three-column footer stays three columns and squeezes.
 
 **What it is not**. An earlier version of this entry blamed the PHP renderer for dropping
-the mobile entry of three-entry arrays. That does not reproduce: against Greenlight 2.1 /
+the mobile entry of three-entry arrays. That does not reproduce: against GreenLight 2.1 /
 gl-page-builder 3.3.7, `["1fr 1fr 1fr", "1fr 1fr", "1fr"]` compiles to a desktop rule plus
 `max-width` rules at 991.98px and 767.98px, and the 767.98px rule also covers 375px. Run
 `python scripts/probe_responsive.py` to confirm on the site in front of you.
@@ -88,7 +88,7 @@ block's own responsive array. `verify.py` cannot see this; a viewport sweep with
 **Cause**. One of three: the script sits in `customJs` on a REST-inserted block and the
 `gspb_block_js` option was never written; the `{{PLUGIN_URL}}` placeholder was left in a
 `wp:html` block, which PHP never processes; or the GSAP path was taken from upstream
-(`libs/motion/gsap.js`), which does not exist on the Greenlight build, whose folder is
+(`libs/motion/gsap.js`), which does not exist on the GreenLight build, whose folder is
 `gl-page-builder`. Importing the bundled `gsap.min.js` as a module also throws
 ("Cannot set property window").
 

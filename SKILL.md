@@ -5,16 +5,16 @@ description: >
   a sketch, without opening the block editor. It extracts the design, converts and uploads
   the images, pushes a token-based stylebook, generates Gutenberg blocks, and wires up the
   pages, the FSE header and footer, the contact form, SMTP and SEO. One set of generator
-  calls emits either native WordPress core blocks or Greenshift element blocks.
+  calls emits either native WordPress core blocks or GreenLight element blocks.
   Use it whenever someone wants a WordPress page, section or whole site built from a
   design, or wants Gutenberg block markup written in code rather than clicked together in
-  the editor. That includes the Greenlight theme, Greenshift, wpsoul, figma to wordpress,
+  the editor. That includes the GreenLight builder, GreenShift, wpsoul, figma to wordpress,
   paper to wordpress, design to wordpress, "recreate this design in wordpress", "build the
   block markup for this section", and any scripted WordPress work over wp-json.
 ---
 
 
-# Greenlight site builder
+# GreenLight site builder
 
 Turn a design into a finished, launch-ready WordPress site without touching the block
 editor. Everything, styles, pages, header, footer, forms, SEO, is pushed over REST, so
@@ -28,11 +28,11 @@ code:
 | | `greenshift` (default) | `core` |
 |---|---|---|
 | Emits | `wp:greenshift-blocks/element` | `wp:group`, `wp:heading`, `wp:paragraph`, `wp:list`, `wp:image`, `wp:buttons` |
-| Needs | Greenshift plugin | nothing |
+| Needs | GreenLight builder | nothing |
 | Styling | per-block CSS compiled server-side | stylebook classes and theme.json |
-| Block id class | `gsbp-xxxxxxx` (Greenshift targets it) | `gl-xxxxxxx` |
+| Block id class | `gsbp-xxxxxxx` (GreenLight targets it) | `gl-xxxxxxx` |
 
-Pick with `set_backend('core')` or `GREENLIGHT_BACKEND=core`. Greenshift stays the default
+Pick with `set_backend('core')` or `GREENLIGHT_BACKEND=core`. GreenLight stays the default
 because it is what existing builds use.
 
 **The difference that matters: core blocks cannot carry arbitrary CSS.** The core backend
@@ -43,7 +43,7 @@ ports with little friction, and one that scatters inline CSS will tell you exact
 
 A few things have no core equivalent and raise rather than degrade silently: raw `<svg>`
 icons, background images on sections, and arbitrary tags like `<nav>`. Each error names the
-alternative. Needing several of them is a good reason to stay on Greenshift.
+alternative. Needing several of them is a good reason to stay on GreenLight.
 
 If a `greenshift-blocks` skill is available, read it first for block-format basics. This
 skill covers the site-level pipeline and the API behaviour that is not documented anywhere.
@@ -67,12 +67,12 @@ specification.
 departs from the spec, and why. The spec itself lives upstream and is fetched on demand.
 
 block emission. `reference/site-conventions.md` covers the decisions that are not
-Greenshift-specific, typography measure, link and title hygiene, safe updates, handover. Read it before writing
+GreenLight-specific, typography measure, link and title hygiene, safe updates, handover. Read it before writing
 page content; most of it is invisible until it is expensive.
 
 ## Four rules that cause most failures
 
-Rules 1-3 are Greenshift-backend specific. Rule 4 applies to both.
+Rules 1-3 are GreenLight-backend specific. Rule 4 applies to both.
 
 1. **CSS delivery depends on where the markup is going, and the two paths never mix.**
    Upstream splits it (`instructions/validate-styles.md`, its `SKILL.md:259`):
@@ -93,7 +93,7 @@ Rules 1-3 are Greenshift-backend specific. Rule 4 applies to both.
 2. **Responsive arrays work over REST; the constraint is who compiles them.**
    `styleAttributes` values are four-entry arrays,
    `["desktop","tablet","mobile_landscape","mobile_portrait"]`, fewer entries applying
-   upward. Verified against Greenlight 2.1 / gl-page-builder 3.3.7: every shape (1 to 4
+   upward. Verified against GreenLight 2.1 / gl-page-builder 3.3.7: every shape (1 to 4
    entries, `null` or `""` gaps, `gridTemplateColumns`) round-trips intact and the PHP
    renderer emits `max-width` rules at 991.98px, 767.98px and 575.98px, smallest entry
    included. An earlier version of this skill banned multi-value arrays on one
@@ -107,7 +107,7 @@ Rules 1-3 are Greenshift-backend specific. Rule 4 applies to both.
    because it is shared, not because arrays are unsafe.
 3. **Every HTML attribute must be reachable from the block JSON.** Not just `data-*`,
    `aria-*` and `role`: `fetchpriority`, `decoding`, `type` and anything else you write
-   into the tag has to appear in `dynamicAttributes` too. Greenshift renders `class`,
+   into the tag has to appear in `dynamicAttributes` too. GreenLight renders `class`,
    `href`, `src`, `alt`, `title`, `width`, `height`, `loading`, `target`, `rel` and the
    media attributes from its own keys, so those are already covered. Everything else is
    undeclared markup: Gutenberg fails validation, offers "Attempt recovery", and recovery
@@ -241,7 +241,7 @@ grouping every rule under its first class silently reorders two equal-specificit
 site's CSS out of a page into the stylebook was verified with a computed-style diff of
 every element on the rendered page, which is the only check that catches this.
 
-**On the `core` backend there is no Greenshift to hold the classes**, but the markup still
+**On the `core` backend there is no GreenLight to hold the classes**, but the markup still
 references them, so they have to be defined somewhere or the page ships unstyled. Same spec,
 rendered as CSS onto the FSE global-styles record:
 
@@ -251,7 +251,7 @@ python scripts/stylebook.py css  reference/starter-tokens.json > stylebook.css  
 ```
 
 The starter system comes out around 9KB of CSS. That record is native to FSE themes and
-survives theme updates, which makes it the closest equivalent to a Greenshift global class.
+survives theme updates, which makes it the closest equivalent to a GreenLight global class.
 
 `reference/starter-tokens.json` is a complete working system: colour, radius, focus-ring and
 fluid type/spacing tokens; button, eyebrow, card, form and screen-reader classes; and the
@@ -285,15 +285,15 @@ python scripts/stylebook.py remove reference/starter-tokens.json         # retir
 ```
 
 **The theme's own palette is replaceable too.** The Stylebook's "Global Color Presets",
-the editor pickers and Greenlight's own CSS (`var(--wp--preset--color--brand)`) read the
+the editor pickers and GreenLight's own CSS (`var(--wp--preset--color--brand)`) read the
 palette at the *theme* origin, which custom presets never touch. A colour token that
 carries `theme_slug` (`"theme_slug": ["brand"]`, or several slots) has its value written
-into those slots on the user global-styles record by `push --theme`, the way Greenlight's
+into those slots on the user global-styles record by `push --theme`, the way GreenLight's
 onboarding sets its brand colour. Slot slugs never change, so nothing in the theme
 dereferences a missing variable, and unmapped slots keep the theme value. The starter
 tokens bind `primary` → `brand`, `surface` → `background`, `surface-alt` → `card-base`,
 `text` → `textcolor`, `heading`, `card-text`, `text-muted` → `lightgrey`. If the site already
-overrides the theme palette (Greenlight's onboarding does), that list is the base and only
+overrides the theme palette (GreenLight's onboarding does), that list is the base and only
 the bound slots change. `push` prints every slot it changes; `remove` leaves them, put the
 old values back in Appearance → Editor → Styles if wanted.
 
@@ -327,7 +327,7 @@ print(sorted(set(re.findall(r'(\-\-wp\-\-[a-z0-9-]+)\s*:', html))))
 
 Then consume what exists, define what the theme references but leaves undefined, and
 invent only what is genuinely specific to this design. **Read the install, not the docs.**
-A live Greenlight 2.1 emits 81 properties: 20 font sizes, 12 spacing steps, 11 shadows,
+A live GreenLight 2.1 emits 81 properties: 20 font sizes, 12 spacing steps, 11 shadows,
 `--wp--style--global--content-size` and `--wp--style--global--wide-size`, and **zero**
 border-radius or size customs, whichever version the documentation describes.
 
@@ -413,7 +413,7 @@ matching what an editor save would have written.
 
 **Never add CSSRender to a block you did not author.** The theme's own blocks ship
 `styleAttributes` next to already-compiled `inlineCssStyles`. Adding CSSRender re-emits the
-raw values, which override the compiled rules. Doing this to a Greenlight header turns the
+raw values, which override the compiled rules. Doing this to a GreenLight header turns the
 hidden mobile panel into a fixed full-height overlay across the whole site. The rule
 "CSSRender on anything with styleAttributes" applies to your blocks only.
 
@@ -503,8 +503,8 @@ theme. `WP.set_template_part(area='footer', content=…)` writes the same way.
 Which of the two treatments a header gets is decided by what is in it, not by the theme's
 name: `blocks.has_greenshift_blocks(raw)`.
 
-**A Greenshift header: edit surgically, never rewrite.** Greenlight's header contains working
-Greenshift navigation machinery, hamburger trigger, sliding mobile panel, menu-copy areas,
+**A GreenLight header: edit surgically, never rewrite.** GreenLight's header contains working
+GreenLight navigation machinery, hamburger trigger, sliding mobile panel, menu-copy areas,
 generated control ids (`gs_menu_XXXX`). Download the raw content and patch it: prepend a
 topbar, swap the placeholder `<li>` items inside the menu `<ul>`, replace the demo CTA,
 restyle the wrapper group. The mobile panel copies the desktop menu at runtime, leave it
@@ -518,12 +518,12 @@ The theme's hamburger ships without an accessible name. Add `aria-label`, `aria-
 and `aria-expanded`, plus a small delegated script that flips `aria-expanded` and the label
 when it toggles. `examples/generate_chrome.py` shows the exact patches.
 
-**Footer: rewrite freely** with Greenshift elements on `gt-footer-grid`. Wrap link columns in
+**Footer: rewrite freely** with GreenLight elements on `gt-footer-grid`. Wrap link columns in
 `<nav aria-label="…">`.
 
 ## Interactivity
 
-Greenshift reads frontend scripts from the `gspb_block_js` option, not from post content.
+GreenLight reads frontend scripts from the `gspb_block_js` option, not from post content.
 The editor writes that option on save, so a block inserted over REST carries `customJs`
 that never runs. Upstream gives three ways to deal with it, in preference order:
 
@@ -552,7 +552,7 @@ and a label, an `aria-live` region announcing the result count, and an empty-sta
 Card categories go in `data-*` attributes declared in the block JSON.
 
 Client-side filtering suits a curated set. Only reach for posts + categories with a
-Greenshift query grid when the client needs to add items themselves, and WooCommerce only
+GreenLight query grid when the client needs to add items themselves, and WooCommerce only
 when they actually sell online. A custom post type is rarely the right first step.
 
 ## Animation
@@ -595,7 +595,7 @@ Both helpers wrap the body in a `prefers-reduced-motion` guard, so users who ask
 less motion get the resting state immediately. Keep that: it is also what the stylebook's
 reduced-motion rule promises for CSS.
 
-Greenshift blocks also carry a native `animation` attribute (the theme's mobile panel
+GreenLight blocks also carry a native `animation` attribute (the theme's mobile panel
 uses `{"type":"clip-down","duration":800,"onclass_active":true}`); it is undocumented
 upstream, so copy a working shape from the theme rather than inventing one.
 
@@ -723,7 +723,7 @@ while testing and purge before a handover.
    presets and aliases the stylebook onto them)
 4. Images: export → `prep_images.py build` (WebP) → `upload`, logo + alt text
 5. Generate and push pages as drafts
-6. Header: discover with `area='header'`, patch surgically if it carries Greenshift
+6. Header: discover with `area='header'`, patch surgically if it carries GreenLight
    blocks, otherwise rewrite; footer rewrite
 7. `check_blocks.py` on the output, then push; `verify.py --all` and
    `check_links.py` on the live pages, then the browser at 375px

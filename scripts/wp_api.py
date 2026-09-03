@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Thin WordPress / Greenshift / Gravity Forms REST client.
+Thin WordPress / GreenLight / Gravity Forms REST client.
 
 Reads credentials from environment or a .env file in the current working directory:
 
@@ -14,7 +14,7 @@ Usage:
     wp = WP()                       # or WP(url=..., user=..., app_password=...)
     wp.get('wp/v2/pages')
     wp.post('wp/v2/pages', {'title': 'Home', 'status': 'draft', 'content': html})
-    wp.gs_settings()                # Greenshift global settings (stylebook)
+    wp.gs_settings()                # GreenLight global settings (stylebook)
 """
 import base64
 import io
@@ -126,7 +126,7 @@ class WP:
                 return self.request(route, payload=payload, method=method, raw_body=raw_body,
                                     headers=headers)
             return body
-        # Several Greenshift endpoints return a JSON-encoded *string*.
+        # Several GreenLight endpoints return a JSON-encoded *string*.
         return json.loads(parsed) if isinstance(parsed, str) else parsed
 
     def rest_url(self, route):
@@ -247,7 +247,7 @@ class WP:
     def set_block_js(self, scripts):
         """Register block scripts in the `gspb_block_js` option.
 
-        Greenshift reads frontend scripts from that option, not from post
+        GreenLight reads frontend scripts from that option, not from post
         content, and the editor is what normally writes it. Blocks inserted
         programmatically carry `customJs` that never runs until this is called.
 
@@ -287,7 +287,7 @@ class WP:
     def find_template_part(self, area):
         """Resolve (theme, slug) for the part filling `area` ('header', 'footer').
 
-        Any FSE theme, not only Greenlight: the slug is read from the site rather
+        Any FSE theme, not only GreenLight: the slug is read from the site rather
         than assumed. A customised copy (source "custom") wins over the theme
         file, and an exact slug match wins over another part in the same area.
         """
@@ -314,11 +314,11 @@ class WP:
         return self.post(f'wp/v2/template-parts/{theme}//{slug}', {'content': content})
 
     def greenshift_plugin_url(self):
-        """Site-relative URL of the Greenshift plugin folder, read from the site.
+        """Site-relative URL of the GreenLight builder's plugin folder, read from the site.
 
-        The folder is not fixed: WPsoul ships the same plugin as
-        `greenshift-animation-and-page-builder-blocks` and, rebranded for the
-        Greenlight theme, as `gl-page-builder`. Upstream's `{{PLUGIN_URL}}`
+        The folder is not fixed: WPsoul ships this block engine as the standalone
+        `greenshift-animation-and-page-builder-blocks` plugin and, in GreenLight,
+        as `gl-page-builder`. Upstream's `{{PLUGIN_URL}}`
         placeholder is only resolved for option-stored scripts, so anything in a
         `wp:html` block needs the real path, and guessing it 404s the library.
         """
@@ -327,7 +327,7 @@ class WP:
             if folder in ('gl-page-builder', 'greenshift-animation-and-page-builder-blocks') \
                     or 'greenshift' in folder:
                 return '/wp-content/plugins/' + folder
-        raise LookupError('no Greenshift / GL page builder plugin installed')
+        raise LookupError('no GreenLight / GL page builder plugin installed')
 
     # ---------- global styles (theme.json user record) ----------
 
@@ -354,10 +354,10 @@ class WP:
             payload['styles'] = styles
         return self.post('wp/v2/global-styles/%d' % self.global_styles_id(), payload)
 
-    # ---------- Greenshift stylebook ----------
+    # ---------- GreenLight stylebook ----------
 
     def gs_settings(self):
-        """Current Greenshift global settings dict (stylebook).
+        """Current GreenLight global settings dict (stylebook).
 
         Writes go to `global_settings`; reads come from `figma_settings`, which
         is the endpoint upstream documents for reading and the one that returns

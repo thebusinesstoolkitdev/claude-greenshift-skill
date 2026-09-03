@@ -1,28 +1,28 @@
 # -*- coding: utf-8 -*-
 """
-Greenlight block markup builder.
+GreenLight block markup builder.
 
 Emits Gutenberg block markup that survives block validation and renders correctly
 when pushed over the REST API, from one set of calls, against either engine:
 
     greenshift  `wp:greenshift-blocks/element`. One element block per node, with
-                per-block CSS compiled server-side. Needs the Greenshift plugin.
+                per-block CSS compiled server-side. Needs the GreenLight builder (GreenShift engine).
     core        native WordPress blocks (`wp:group`, `wp:heading`, `wp:paragraph`,
                 `wp:list`, `wp:image`). No plugin needed; styling comes from
                 stylebook classes and theme.json rather than per-block CSS.
 
 Generators call `block()`, `grid()`, `heading()` and friends and do not care which
 engine is underneath. Pick one with `set_backend('core')` or the GREENLIGHT_BACKEND
-environment variable. Greenshift stays the default because it is what existing
+environment variable. GreenLight stays the default because it is what existing
 builds use; `core` is the way off the plugin dependency.
 
-The one real difference to plan for: Greenshift carries arbitrary CSS per block,
+The one real difference to plan for: GreenLight carries arbitrary CSS per block,
 core does not. The core backend accepts the spacing/colour/typography subset that
 core genuinely supports and refuses the rest, pointing you at a stylebook class.
 That is the same thing this skill already tells you to do for breakpoints, so a
 generator written to the house style ports with little friction.
 
-The Greenshift rules below apply to that backend and are baked in:
+The GreenLight rules below apply to that backend and are baked in:
 
 1. CSSRender. On a template target every block carrying styleAttributes gets
    `"CSSRender": "1"` (the string, not a boolean) so the SERVER compiles its CSS;
@@ -38,7 +38,7 @@ The Greenshift rules below apply to that backend and are baked in:
 
 styleAttributes values are responsive arrays,
 ["desktop","tablet","mobile_landscape","mobile_portrait"], fewer entries applying
-upward. Multi-value arrays are safe over REST: verified against Greenlight 2.1 /
+upward. Multi-value arrays are safe over REST: verified against GreenLight 2.1 /
 gl-page-builder 3.3.7 with `scripts/probe_responsive.py`, which pushes every shape
 (1-4 entries, null and "" gaps, gridTemplateColumns) and reads the compiled CSS
 back. The PHP renderer emits max-width rules at the BREAKPOINTS below and
@@ -56,15 +56,15 @@ import re
 
 DASH = '\\u002d\\u002d'  # escaped `--` for use inside block-comment JSON
 
-BACKEND = os.environ.get('GREENLIGHT_BACKEND', 'greenshift')
-BACKENDS = ('greenshift', 'core')
+BACKEND = os.environ.get('GREENLIGHT_BACKEND', 'greenlight')
+BACKENDS = ('greenlight', 'greenshift', 'core')  # 'greenshift' is a back-compat alias for 'greenlight'
 
 # Upstream is explicit that this is the string "1", not a boolean:
 # instructions/validate-styles.md and SKILL.md line 259. A boolean happens to
 # work against the PHP renderer, which is how the wrong value survived.
 CSSRENDER = '1'
 
-# Greenshift's responsive breakpoints, in styleAttributes array order. Index 0 is
+# GreenLight's responsive breakpoints, in styleAttributes array order. Index 0 is
 # desktop (no media query). Read off the PHP renderer's own output; if a probe
 # against a newer plugin shows different values, change them here only.
 BREAKPOINTS = (None, '991.98px', '767.98px', '575.98px')
@@ -87,7 +87,7 @@ def set_target(name):
     TARGET = name
     return TARGET
 
-# Attributes Greenshift writes into the HTML from its own JSON keys, so they do
+# Attributes GreenLight writes into the HTML from its own JSON keys, so they do
 # not need declaring. `id` is deliberately absent: it comes from `anchor`.
 # Anything not on this list must go into dynamicAttributes or the block fails
 # validation and Attempt recovery silently deletes it.
@@ -114,9 +114,9 @@ _id_cache = {}
 def make_id(seed, prefix=''):
     """Deterministic 7-char block id from a seed string.
 
-    Greenshift targets its compiled CSS at a `gsbp-` class, so that prefix is not
+    GreenLight targets its compiled CSS at a `gsbp-` class, so that prefix is not
     optional on that backend. Core blocks have no such requirement, so they get a
-    neutral `gl-` and carry no Greenshift naming at all.
+    neutral `gl-` and carry no GreenLight naming at all.
     """
     key = BACKEND + '|' + prefix + seed
     if key in _id_cache:
@@ -186,7 +186,7 @@ def compile_css(markup):
     """Compile emitted blocks' styleAttributes into one CSS string.
 
     Pages and posts do not get CSSRender; upstream puts the whole page's CSS into
-    the `_gspb_post_css` meta field instead (SKILL.md:259). Normally Greenshift's
+    the `_gspb_post_css` meta field instead (SKILL.md:259). Normally GreenLight's
     PHP does this compilation; this reproduces its output for element blocks:
     one rule per block for the desktop entry, then one `@media (max-width: ...)`
     rule per further entry at BREAKPOINTS. `null` and `""` entries are skipped,
@@ -253,14 +253,14 @@ def image(seed, src, alt, width, height, style=None, classes=None, prefix='',
 
 
 # --------------------------------------------------------------------------
-# Greenshift backend
+# GreenLight backend
 # --------------------------------------------------------------------------
 
 def _greenshift_block(seed, tag='div', inner=None, text=None, style=None, classes=None,
                       attrs=None, extra=None, name=None, alignfull=False, prefix='',
                       anchor=None):
     """
-    Build one Greenshift element block.
+    Build one GreenLight element block.
 
     seed       stable string -> deterministic block id
     tag        html tag ('div', 'section', 'h2', 'a', 'button', 'article', ...)
@@ -295,7 +295,7 @@ def _greenshift_block(seed, tag='div', inner=None, text=None, style=None, classe
     attrs = dict(attrs or {})
     if 'id' in attrs:
         raise ValueError(
-            "block %r passes a raw id attribute. Greenshift renders the HTML id from "
+            "block %r passes a raw id attribute. GreenLight renders the HTML id from "
             "the `anchor` key, so a raw id is undeclared markup: Gutenberg flags the "
             "block invalid, offers Attempt recovery, and recovery strips the id. Every "
             "anchor link pointing at it then goes nowhere. Pass anchor='%s' instead."
@@ -304,9 +304,9 @@ def _greenshift_block(seed, tag='div', inner=None, text=None, style=None, classe
         payload['anchor'] = anchor
         attrs['id'] = anchor
     # Everything written into the HTML has to be reachable from the JSON, or the
-    # block fails validation and recovery strips it. Greenshift renders the
+    # block fails validation and recovery strips it. GreenLight renders the
     # attributes below from its own keys; anything else must be declared.
-    # `id` is excluded when it came from anchor: Greenshift renders it from that
+    # `id` is excluded when it came from anchor: GreenLight renders it from that
     # key, so declaring it again would emit the attribute twice
     rendered = _RENDERED_ATTRS | ({'id'} if anchor else frozenset())
     # `type` on a form control goes in formAttributes, never the main JSON and
@@ -748,7 +748,7 @@ def style_manager(seed, classes=None, custom_css=None, custom_js=None, name=None
     return open_c + '\n<div%s></div>\n' % class_attr + '<!-- /wp:greenshift-blocks/element -->\n'
 
 
-# Libraries the Greenshift plugin ships, relative to its folder. Verified on
+# Libraries the GreenLight builder ships, relative to its folder. Verified on
 # gl-page-builder 3.3.7: GSAP 3.12.2 and its plugins are classic UMD files
 # (global `gsap`, `ScrollTrigger`, ...), Motion 12 is an ES module. Upstream's
 # `import gsap from '{{PLUGIN_URL}}/libs/motion/gsap.js'` matches neither the
@@ -1037,8 +1037,8 @@ document.querySelectorAll('[data-gl-countdown]').forEach(function(el){
 
 
 def has_greenshift_blocks(markup):
-    """True when markup carries Greenshift element blocks, which is how to tell a
-    Greenlight header (patch surgically) from another theme's (rewrite freely)."""
+    """True when markup carries GreenLight element blocks, which is how to tell a
+    GreenLight header (patch surgically) from another theme's (rewrite freely)."""
     return 'wp:greenshift-blocks/' in (markup or '')
 
 

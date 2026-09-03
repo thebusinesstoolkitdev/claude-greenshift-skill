@@ -31,7 +31,7 @@ from blocks import _RENDERED_ATTRS, CSSRENDER  # noqa: E402
 
 BLOCK = re.compile(r'<!-- wp:greenshift-blocks/element (\{.*?\}) -->\s*(<[^>]*>)', re.S)
 ATTR = re.compile(r'([a-zA-Z_:][-\w:.]*)\s*=\s*"([^"]*)"')
-# emitted by Greenshift from its own keys, or produced by the renderer itself
+# emitted by GreenLight from its own keys, or produced by the renderer itself
 DERIVED = _RENDERED_ATTRS | {'id', 'style', 'decoding', 'fetchpriority', 'viewbox'}
 
 

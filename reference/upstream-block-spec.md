@@ -45,7 +45,7 @@ stylemanager, which only the editor compiles. This skill routes it to the styleb
 site-wide anyway. On page targets both agree: it goes into `_gspb_post_css`.
 
 **GSAP loading.** Upstream imports GSAP as an ES module from
-`{{PLUGIN_URL}}/libs/motion/gsap.js`. On the Greenlight build (`gl-page-builder`) that path
+`{{PLUGIN_URL}}/libs/motion/gsap.js`. On the GreenLight build (`gl-page-builder`) that path
 does not exist and the bundled GSAP is a UMD file that throws when imported as a module.
 This skill loads it with classic script tags from `libs/gsap/`, reads the plugin folder
 from the site, and imports only Motion (`libs/motion/motion.js`) as a module.
@@ -67,7 +67,7 @@ PHP renderer emits: `dynamicGClasses[].css` and `selectors[].css`, never `custom
 
 **Single-value `styleAttributes`** (retired 2026-09-02). This skill used to emit one value
 per property and forbid responsive arrays, on the strength of one observation that the PHP
-renderer dropped the smallest entry. Reproduced against Greenlight 2.1 / gl-page-builder
+renderer dropped the smallest entry. Reproduced against GreenLight 2.1 / gl-page-builder
 3.3.7 with `scripts/probe_responsive.py`: every shape compiles correctly, smallest entry
 included, at `max-width` 991.98px / 767.98px / 575.98px. `compile_css()` now mirrors those
 breakpoints for page targets, and the core backend raises on multi-value arrays rather than
@@ -78,7 +78,7 @@ before re-opening this.
 
 `parseCss()` does `selectorPart.match(/\.([a-zA-Z_-][a-zA-Z0-9_-]*)/)` and attaches the
 rule to that class as a local class with a sub-selector. Pushed through the PHP renderer on
-a template target (2026-09-02, Greenlight 2.1 / gl-page-builder 3.3.7):
+a template target (2026-09-02, GreenLight 2.1 / gl-page-builder 3.3.7):
 
 | Selector | Result |
 |---|---|
@@ -102,7 +102,7 @@ authored; on a template target move the class-less rules into a stylebook class.
 ## Verified against a live install
 
 `scripts/probe_responsive.py --parity` is the standing record; the bullets below are what
-it and the one-off probes of 2026-09-02 established on Greenlight 2.1 / gl-page-builder
+it and the one-off probes of 2026-09-02 established on GreenLight 2.1 / gl-page-builder
 3.3.7 / WordPress with LiteSpeed:
 
 - `styleAttributes` arrays of 1 to 4 entries, `null` or `""` gaps, and `gridTemplateColumns`
@@ -117,7 +117,7 @@ it and the one-off probes of 2026-09-02 established on Greenlight 2.1 / gl-page-
   cannot leak styles into the page
 - a block carrying editor-written `inlineCssStyles` plus `CSSRender:"1"` is emitted once,
   not twice
-- the Greenshift stylebook CSS prints before the theme's `global-styles-inline-css`; REST
+- the GreenLight stylebook CSS prints before the theme's `global-styles-inline-css`; REST
   GETs on `figma_settings` and `global_settings` are page-cached after a write and need a
   unique query string to read the live record
 

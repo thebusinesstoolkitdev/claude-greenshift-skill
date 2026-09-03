@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Convert one HTML design to Greenshift blocks with upstream's converter, then
+Convert one HTML design to GreenLight blocks with upstream's converter, then
 apply this skill's delivery contract and checks.
 
     python scripts/convert_html.py input/hero.html -o output/hero.html

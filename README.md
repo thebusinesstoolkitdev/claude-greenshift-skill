@@ -1,7 +1,7 @@
 # claude-greenshift-skill
 
 A [Claude Code](https://claude.com/claude-code) skill for building complete WordPress sites
-on the **Greenshift** block builder (and the **Greenlight** FSE theme) from a design. Figma, Paper, or a screenshot, entirely over the REST API.
+on the **GreenLight** block builder (and the **GreenLight** FSE theme) from a design. Figma, Paper, or a screenshot, entirely over the REST API.
 
 No clicking through the block editor. Design system, pages, header, footer, forms and SEO
 are all pushed as data, so a build is scriptable, reviewable and repeatable.
@@ -30,7 +30,7 @@ Claude Code picks it up automatically. Ask for a build in plain language, *"recr
 this Figma design on my WordPress site"*, or invoke it directly with `/greenlight`.
 
 Requirements: Python 3.8+ (standard library only, Pillow for image conversion), a WordPress
-site with Greenshift active, and an administrator application password.
+site with GreenLight active, and an administrator application password.
 
 ## Quick start
 
@@ -54,7 +54,7 @@ python scripts/check_links.py
 ```
 SKILL.md                      the skill itself: pipeline, rules, gotchas
 scripts/
-  wp_api.py                   WordPress / Greenshift / Gravity Forms REST client
+  wp_api.py                   WordPress / GreenLight / Gravity Forms REST client
   blocks.py                   block builder: core or greenshift backend, same calls
   stylebook.py                push and verify the design system; --theme registers tokens as presets
   probe_responsive.py         what the live renderer actually emits, before you trust a rule
@@ -104,7 +104,7 @@ accessible-name audit that PageSpeed Insights reports under *Agent Accessibility
 
 ## Notes
 
-- Greenshift is required. The Greenlight theme is optional, only the header/footer section
+- GreenLight is required. Its companion FSE theme is optional, only the header/footer section
   is specific to it, and the same approach works on any FSE theme.
 - `.env` is gitignored. Nothing here stores credentials.
 - Rotate any application password that has been shared during a build.
@@ -113,14 +113,13 @@ accessible-name audit that PageSpeed Insights reports under *Agent Accessibility
 
 MIT, see [LICENSE](LICENSE).
 
-Greenshift and Greenlight are products of [Wpsoul](https://wpsoul.com/). This is an
+GreenLight is a product of [WPsoul](https://wpsoul.com/), part of the GreenShift ecosystem. This is an
 independent, unaffiliated project.
 
 ## Credits
 
-The Greenshift block format this skill emits is defined by **GreenLight Vibe**
-(<https://github.com/wpsoul/greenlight-vibe>), by WPsoul, MIT licensed. Greenshift and the
-Greenlight theme are WPsoul products. `reference/upstream-block-spec.md` records the parts
+The GreenLight/GreenShift block format this skill emits is defined by **GreenLight Vibe**
+(<https://github.com/wpsoul/greenlight-vibe>), by WPsoul, MIT licensed. GreenLight is a WPsoul product. `reference/upstream-block-spec.md` records the parts
 of that specification this skill depends on, with the upstream document each claim comes
 from, so the two can be reconciled when either changes.
 

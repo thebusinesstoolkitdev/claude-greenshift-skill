@@ -1,7 +1,7 @@
 # Site conventions
 
 Things that are true of any website, learned the expensive way on builds that passed every
-mechanical check and were still wrong. `SKILL.md` covers Greenshift and the REST API; this
+mechanical check and were still wrong. `SKILL.md` covers GreenLight and the REST API; this
 covers the site.
 
 ---

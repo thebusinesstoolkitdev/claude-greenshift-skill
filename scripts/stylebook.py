@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Push a design system into the Greenshift stylebook (global settings), and
+Push a design system into the GreenLight stylebook (global settings), and
 optionally register the same tokens as theme.json presets.
 
     python stylebook.py push reference/starter-tokens.json           # stylebook only
@@ -118,7 +118,7 @@ def alias_var(var):
 def to_css(spec, aliased=False):
     """Render a stylebook spec as plain CSS.
 
-    The core backend has no Greenshift to hold global classes, but the markup it
+    The core backend has no GreenLight to hold global classes, but the markup it
     emits still references them, so they have to be defined somewhere or the page
     ships unstyled. This is the same design system, expressed as CSS.
     """
@@ -226,7 +226,7 @@ def replace_theme_palette(wp, spec, restore=False):
     The Stylebook's "Global Color Presets", the editor's colour pickers and the
     theme's own CSS (`var(--wp--preset--color--brand)`) all read the palette at
     the theme origin. A user-level `palette.theme` list overrides it wholesale,
-    which is how the Greenlight onboarding sets its brand colour. So: start from
+    which is how the GreenLight onboarding sets its brand colour. So: start from
     the list already on the user record if the site has one (an onboarding
     override, other slots the client changed), else the theme's own; swap the
     `color` of every slot a token names in `theme_slug`; write the full list
@@ -322,7 +322,7 @@ def elements_as_class(spec, prefix=None):
 
 
 def _stylebook_var(var, aliases):
-    """The spec entry in the shape Greenshift stores, minus this script's own keys."""
+    """The spec entry in the shape GreenLight stores, minus this script's own keys."""
     out = {k: v for k, v in var.items() if k not in ('kind', 'alias')}
     if var['variable'] in aliases:
         out['variable_value'] = 'var(%s)' % aliases[var['variable']]
@@ -384,9 +384,9 @@ def push_core(path, theme=False):
     """Push the stylebook as CSS onto the FSE global-styles record, no plugin.
 
     FSE themes carry arbitrary CSS at styles.css on that record, which is the
-    closest native equivalent to a Greenshift global class and survives theme
+    closest native equivalent to a GreenLight global class and survives theme
     updates. With --theme the tokens are registered as presets first and the CSS
-    aliases them, the same as the Greenshift path.
+    aliases them, the same as the GreenLight path.
     """
     wp = WP()
     spec = load(path)
@@ -543,7 +543,7 @@ if __name__ == '__main__':
     theme = '--theme' in sys.argv
     if command == 'push':
         # --core writes the same design system as CSS on the FSE global-styles
-        # record, for builds that are not running the Greenshift plugin
+        # record, for builds that are not running the GreenLight plugin
         (push_core if '--core' in sys.argv else push)(spec_path, theme=theme)
     elif command == 'css':
         print(to_css(load(spec_path), aliased=theme))

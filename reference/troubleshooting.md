@@ -8,6 +8,21 @@ that is what you will have when you arrive.
 
 Entries marked _GreenLight backend only_ do not apply when `blocks.py` is set to the `core` backend, which has no per-block compiled CSS and so cannot fail in these ways.
 
+## Sections are full-width, left-aligned, with no side padding
+
+**Symptom** -- Every section runs edge to edge, content is not centred, nothing is capped at
+the theme's wide width. Padding and backgrounds are right; layout is not.
+
+**Cause** -- `.wp-section` and `.wp-content-wrap` are naming conventions, not styled
+classes. Nothing in the Greenlight theme or gl-page-builder styles them on the front end
+(the only occurrence in either is the prompt text in the editor bundle). Upstream expects
+the author to supply the rules. This skill supplies them once, site-wide, from the
+stylebook, so if the stylebook has not been pushed to this site the shell has no CSS.
+
+**Fix** -- `python scripts/stylebook.py push reference/starter-tokens.json`, then
+`python scripts/stylebook.py verify` and confirm `wp-section` and `wp-content-wrap` are
+listed as present. Do not paste the shell CSS into a page; it belongs in the stylebook.
+
 ## Blocks render with no styling at all
 
 _GreenLight backend only._
@@ -23,7 +38,7 @@ CSS lives in `_gspb_post_css`. The other usual cause is `update_page()` clearing
 meta after `set_post_css()` wrote it.
 
 **Fix**. `WP.push_page(page_id, content=html)`. It writes the markup with
-`clear_css=False`, compiles CSS (theme-shell duplicates already stripped), and stores
+`clear_css=False`, compiles CSS (shell duplicates already stripped), and stores
 it via `greenshift/v1/css_settings`, falling back to the page `meta` field if that
 endpoint is blocked. Template parts still get `"CSSRender": "1"` (the string, not a
 boolean) from `blocks.block()` when the target is `template`.

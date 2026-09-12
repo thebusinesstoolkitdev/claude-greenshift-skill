@@ -72,7 +72,7 @@ VAR_SURFACE_ALT = 'var(--gt-surface-alt, #f2e8d6)'
 VAR_TEXT_MUTED = 'var(--gt-text-muted, #8c8172)'
 
 def section(seed, inner, bg=None, bgimg=None, pad='var(--gt-section-pad, clamp(3.5rem, 7vw, 5rem))', name=None):
-    # Theme already styles .wp-section. Only pad + background belong here.
+    # The stylebook styles .wp-section (starter-tokens.json). Only pad + background belong here.
     style = {"paddingTop": [pad], "paddingBottom": [pad]}
     if bg:
         style["backgroundColor"] = [bg]
@@ -85,7 +85,7 @@ def section(seed, inner, bg=None, bgimg=None, pad='var(--gt-section-pad, clamp(3
                  extra={"isVariation": "contentwrapper"}, name=name, alignfull=True)
 
 def content(seed, inner, extra_style=None, name=None):
-    # Theme already styles .wp-content-wrap. extra_style is for design overrides.
+    # The stylebook styles .wp-content-wrap. extra_style is for design overrides.
     return block(seed, 'div', inner=inner, style=extra_style, name=name,
                  gclass='wp-content-wrap', html_attrs='data-type="content-area-component"')
 
@@ -143,7 +143,7 @@ who = section(s + 'who',
     block(s + 'wgrid', 'div', inner=
         img(s + 'wimg', f"{U}/gt-store-interior.jpg", 'Inside the Marigold & Fern shop', 1200, 1487,
             {"width": ["100%"], "height": ["auto"], "objectFit": ["cover"], "borderRadius": ["16px"]}) + who_text,
-        style={"maxWidth": ["1290px"]}, gclass='gt-grid-even', name='Who Grid'),
+        gclass='gt-grid-even', name='Who Grid'),
     bg=VAR_SURFACE, name='Who We Are')
 
 def mv_card(seed, icon, label, labelcolor, h3txt, para):
@@ -295,7 +295,7 @@ right = block(s + 'right', 'div', inner=
 
 main_ct = section(s + 'main',
     block(s + 'mgrid', 'div', inner=left + right,
-          style={"maxWidth": ["1290px"]}, gclass='gt-grid-split', name='Contact Grid'),
+          gclass='gt-grid-split', name='Contact Grid'),
     bg=VAR_SURFACE, name='Contact Main')
 
 cta_t = cta_purple(s + 'cta', 'Find us on Mill Street', '18 Mill Street, Ashford, Kent TN23 1AA',

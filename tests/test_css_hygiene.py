@@ -74,10 +74,10 @@ def run():
           css == '', css)
 
     wide = blocks.container('hygiene-wide', blocks.heading('hygiene-h3', 3, 'Wide'),
-                            width='1290px')
+                            width='1000px')
     css = blocks.compile_css(wide)
     check('container(width=) keeps the override',
-          '1290px' in css, css)
+          '1000px' in css, css)
     check('container(width=) does not emit display:flex',
           'display:flex' not in css.replace(' ', ''),
           css)

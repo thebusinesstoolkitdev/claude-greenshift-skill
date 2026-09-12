@@ -22,12 +22,18 @@ the whole build is scriptable, reviewable, and repeatable.
 
 ## Before anything else: check for updates
 
-Run `python scripts/check_update.py` at the start of every session that uses this skill.
-If it reports an update, **stop and tell the user first** — say their local copy is out
-of date, give them the exact command it prints (`git -C <skill dir> pull`), and ask
-whether to update now before continuing. Do not silently build on a stale copy: the
-API behaviour recorded here changes with each GreenLight/GreenShift release, and an old
-skill produces confidently wrong markup.
+**Always** run `python scripts/check_update.py` at the start of every session that uses
+this skill, and **always tell the user the result** — one line when the copy is current
+(`greenlight skill is up to date (<sha>)`), and a clear stop when it is not.
+
+If it reports an update: **stop and tell the user before doing anything else** — say
+their local copy is out of date, give them the exact command it prints
+(`git -C <skill dir> pull`), and ask whether to update now before continuing. Do not
+silently build on a stale copy: the API behaviour recorded here changes with each
+GreenLight/GreenShift release, and an old skill produces confidently wrong markup.
+
+If the check itself cannot run (no git, offline), say that too, so the user knows the
+copy is unverified rather than assuming it is current.
 
 ## Two engines, one set of calls
 
@@ -96,12 +102,19 @@ Rules 1-3 are GreenLight-backend specific. Rule 4 applies to both.
    pass through the editor, so nothing compiles their CSS; pick the wrong half of this
    contract and the page renders unstyled.
 
-   **Do not re-emit the theme shell.** `.wp-section` and `.wp-content-wrap` are already
-   styled by the theme (flex column, side pad, wide-size width). `section()` only sets
-   vertical padding and optional background. Pasting upstream's "use next styles for
-   sections" block into the page stylesheet, or copying those declarations onto every
-   section as `styleAttributes`, is the usual source of CSS the design never asked for.
-   `compile_css()` strips theme-shell duplicates if they sneak in.
+   **Do not re-emit the shell per block.** `.wp-section` and `.wp-content-wrap` are
+   styled once, site-wide, by the stylebook: `reference/starter-tokens.json` ships both
+   rules and `stylebook.py push` installs them. **Nothing in the theme or the plugin
+   styles these classes** (checked against Greenlight 2.1 and gl-page-builder 3.3.7; the
+   only occurrence in either is the prompt text inside the editor bundle). Upstream's
+   "use next styles for sections" means the author supplies the rule, and a site-wide
+   rule belongs in the stylebook. The rules read the theme's own tokens
+   (`--wp--style--global--wide-size`, `--wp--custom--spacing--side`), so the theme still
+   controls the values and the skill carries no width of its own. `section()` only sets
+   vertical padding and optional background. Pasting the shell CSS into a page
+   stylesheet, or copying it onto every section as `styleAttributes`, is the usual source
+   of CSS the design never asked for; `compile_css()` strips those duplicates. If sections
+   render full-width and un-centred, the stylebook has not been pushed.
 
    **Push a page with `WP.push_page()`, nothing else.** WordPress has no file write from
    this skill. Gutenberg save is what compiles CSS, and REST never goes through Gutenberg.
@@ -228,8 +241,8 @@ Extract in this order, then get the section map approved before generating:
 Rewrite Paper output to the HTML `convert.js` will keep: unique prefixed classes
 (minimum four letters), styles in `<style data-wp-block-html="css">` on a classed
 parent, no `:root`, no `* {}`, no Tailwind, no React. Use the `wp-section` /
-`wp-content-wrap` **markup** for full-bleed bands; do **not** paste the theme's
-`.wp-section` CSS into the page stylesheet, the theme already prints it.
+`wp-content-wrap` **markup** for full-bleed bands; do **not** paste the
+`.wp-section` CSS into the page stylesheet; the stylebook already carries it site-wide.
 
 Paper tokens map to native stylebook keys (`variables`, `colours`, `global_classes`)
 via GET-merge-write. Do not send `figma_*` keys; stock 3.3.7 merges them badly.
@@ -391,7 +404,7 @@ replaced whole on write. `stylebook.py` mirrors both; `verify` reports any alias
 target the page never defines.
 
 Layout classes hold every breakpoint: `gt-grid-2` `gt-grid-3` `gt-grid-4` `gt-grid-even`
-`gt-grid-split` `gt-footer-grid` `gt-form-row` `gt-section` `gt-container`.
+`gt-grid-split` `gt-footer-grid` `gt-form-row` `wp-section` `wp-content-wrap`.
 
 **Every prose class carries a `max-width`.** `gt-lead` and `gt-body-copy` cap at 68-72ch.
 Without it a class looks right inside a two-column split and runs 180 characters the first
@@ -474,13 +487,17 @@ A full-width section with centred content has a prescribed structure. `section()
 </section>
 ```
 
-Keep the `alignfull` class, `var(--wp--style--global--wide-size, 1200px)` for the inner
-width, and `var(--wp--spacing--side, min(3vw, 20px))` for side padding. **Do not copy the
-theme's `.wp-section` / `.wp-content-wrap` CSS into the page.** The theme already prints
-those rules. Padding top and bottom, plus optional background, are yours; the flex
-column, side pad, zero margin and wide-size width are not. Inventing your own section
-class instead is what produces inter-section seams and a width that disagrees with the
-theme.
+Keep the `alignfull` class. The two classes are styled **once, by the stylebook**
+(`reference/starter-tokens.json` → `stylebook.py push`), reading the theme's own tokens:
+`var(--wp--style--global--wide-size, 1200px)` for the inner width and
+`var(--wp--custom--spacing--side, min(3vw, 20px))` for side padding. (Upstream writes
+`--wp--spacing--side`; the theme never defines that one, so its fallback always fired.
+The `--wp--custom--` form is the token `theme.json` actually emits.) Nothing in the theme
+or the plugin styles these classes on the front end. **Do not copy the shell CSS into a
+page** — one site-wide rule, not one per page. Padding top and bottom, plus optional
+background, are yours per section; the flex column, side pad, zero margin and wide-size
+width are the stylebook's. Inventing your own section class instead is what produces
+inter-section seams and a width that disagrees with the theme.
 
 ## Where a page's CSS lives
 

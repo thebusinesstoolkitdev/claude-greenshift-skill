@@ -99,8 +99,9 @@ examples/
    `"CSSRender": "1"` (the string) on every block with `styleAttributes`; pages and posts
    get none, and their CSS goes into the `_gspb_post_css` meta instead, written by
    `WP.push_page()`. REST-pushed blocks never pass through the editor, so pick the wrong
-   half and the page renders unstyled. Do not re-emit the theme's `.wp-section` /
-   `.wp-content-wrap` rules; `compile_css()` strips those duplicates.
+   half and the page renders unstyled. Do not re-emit the `.wp-section` /
+   `.wp-content-wrap` shell per block; the stylebook ships those rules once (nothing
+   in the theme styles them) and `compile_css()` strips duplicates.
 2. **Responsive arrays are verified, not assumed.** `styleAttributes` take four-entry
    arrays (desktop, tablet, mobile landscape, mobile portrait). `scripts/probe_responsive.py`
    pushes every shape at a live site and diffs the compiled CSS, so a new plugin version

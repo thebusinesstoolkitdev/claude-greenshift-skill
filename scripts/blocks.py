@@ -69,9 +69,10 @@ CSSRENDER = '1'
 # against a newer plugin shows different values, change them here only.
 BREAKPOINTS = (None, '991.98px', '767.98px', '575.98px')
 
-# The GreenLight theme already prints these on .wp-section / .wp-content-wrap.
+# The stylebook prints these on .wp-section / .wp-content-wrap once, site-wide
+# (reference/starter-tokens.json); nothing in the theme or plugin does.
 # Re-emitting them as styleAttributes compiles to a .gsbp-xxx rule that
-# duplicates the theme. That is the usual source of "unnecessary CSS" on a
+# duplicates that stylebook rule. That is the usual source of "unnecessary CSS" on a
 # Figma-to-blocks build: the design CSS, plus a second copy of the shell.
 # None means "any value that is clearly the theme's own" (its custom property
 # or the documented fallback).
@@ -109,7 +110,7 @@ def kebab_prop(name):
 
 
 def is_theme_shell_decl(classes, prop, value):
-    """True when this declaration is already provided by the theme for `classes`."""
+    """True when this declaration is already provided by the stylebook shell rule for `classes`."""
     value = (value or '').strip()
     if not value:
         return False
@@ -291,9 +292,10 @@ def compile_css(markup):
     Stylemanager blocks contribute their `dynamicGClasses[].css` and `customCss`
     verbatim, so one call covers a page's own classes and its block styles.
 
-    Theme-shell declarations on `.wp-section` / `.wp-content-wrap` are dropped:
-    the GreenLight theme already prints those rules, and shipping them again is
-    the usual source of CSS the design never asked for. `is_theme_shell_decl()`
+    Shell declarations on `.wp-section` / `.wp-content-wrap` (supplied once by the
+    stylebook, see reference/starter-tokens.json) are dropped:
+    shipping them again per page is the usual source of CSS the design never
+    asked for. `is_theme_shell_decl()`
     is the matcher; override a shell property with a different value and it stays.
 
     `scripts/probe_responsive.py --parity` diffs this against the live renderer.
@@ -727,7 +729,7 @@ def section(seed, inner, bg=None, bg_image=None, pad='var(--gt-section-pad, clam
             tag='section', name=None, prefix=''):
     """Full-bleed section wrapper with fluid vertical padding.
 
-    On the core backend the layout comes from the `gt-section` stylebook class
+    On the core backend the layout comes from the `wp-section` stylebook class
     rather than inline CSS, because core blocks cannot carry arbitrary properties.
     The class ships in reference/starter-tokens.json and holds the same rules.
     """
@@ -740,13 +742,16 @@ def section(seed, inner, bg=None, bg_image=None, pad='var(--gt-section-pad, clam
                 'a background image on block %r needs a stylebook class on the core '
                 'backend. Core blocks carry no background-image property. Add one '
                 'with the url baked in, or stay on the greenshift backend.' % seed)
-        return block(seed, tag, inner=inner, style=style, classes='gt-section',
+        return block(seed, tag, inner=inner, style=style, classes='wp-section',
                      name=name, alignfull=True, prefix=prefix)
 
-    # The theme already styles `.wp-section` (flex column, side pad, zero
-    # margin). Only vertical padding and optional background belong per block.
-    # Copying the shell here compiled a second copy of the theme onto every
-    # section via `_gspb_post_css`.
+    # The STYLEBOOK styles `.wp-section` (flex column, side pad from the theme's
+    # --wp--custom--spacing--side, zero margin) -- see reference/starter-tokens.json.
+    # Nothing in the theme or the plugin styles this class; upstream's "use next
+    # styles for sections" means the author supplies the rule, and a site-wide
+    # rule belongs in the stylebook. Only vertical padding and optional
+    # background belong per block. Copying the shell here compiled a second copy
+    # onto every section via `_gspb_post_css`.
     style = {
         'paddingTop': [pad], 'paddingBottom': [pad],
     }
@@ -1156,15 +1161,16 @@ def has_greenshift_blocks(markup):
 def container(seed, inner, width=None, name=None, prefix=''):
     """Centered content column inside a section.
 
-    The theme already styles `.wp-content-wrap` (max-width 100%, width from
-    `--wp--style--global--wide-size`). Pass `width` only to change the fallback
-    inside that variable; do not re-emit the flex/max-width shell.
+    The stylebook styles `.wp-content-wrap` (max-width 100%, width from the
+    theme's `--wp--style--global--wide-size`) -- see reference/starter-tokens.json.
+    Nothing in the theme or plugin styles the class itself. Pass `width` only to
+    override the theme value; do not re-emit the shell.
     """
     if BACKEND == 'core':
-        # gt-container carries the max-width and centring; core's constrained
-        # layout handles the rest
+        # same stylebook shell class as the greenshift backend; core's
+        # constrained layout handles centring
         return block(seed, 'div', inner=inner, name=name, prefix=prefix,
-                     classes='gt-container')
+                     classes='wp-content-wrap')
     style = None
     if width:
         # literal override, not the theme variable: wrapping it in

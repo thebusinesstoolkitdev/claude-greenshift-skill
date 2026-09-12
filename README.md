@@ -32,6 +32,19 @@ this Figma design on my WordPress site"*, or invoke it directly with `/greenligh
 Requirements: Python 3.8+ (standard library only, Pillow for image conversion), a WordPress
 site with GreenLight active, and an administrator application password.
 
+## Updating
+
+The skill checks GitHub for a newer version at the start of each session and tells you
+if your copy is behind. To update:
+
+```bash
+git -C ~/.claude/skills/greenlight pull
+```
+
+Then start a new session so the updated `SKILL.md` is loaded. Check manually any time
+with `python scripts/check_update.py` (exit code 1 = update available). Set
+`GREENLIGHT_SKIP_UPDATE_CHECK=1` to silence it, e.g. in CI.
+
 ## Quick start
 
 ```bash
@@ -69,6 +82,7 @@ scripts/
 reference/
   starter-tokens.json         a complete working design system to adapt
   media-map-template.json     image manifest shape: slug, alt, id, dimensions
+  auth-fallback.php           mu-plugin: restore Authorization hosts strip
   upstream-block-spec.md      the block format as WPsoul specifies it, with divergences
   site-conventions.md         website practice: measure, links, titles, safe updates
   troubleshooting.md          symptom-first list of every bug that shipped
@@ -83,8 +97,10 @@ examples/
 
 1. **CSS goes where the markup goes.** Template parts, templates and patterns get
    `"CSSRender": "1"` (the string) on every block with `styleAttributes`; pages and posts
-   get none, and their CSS goes into the `_gspb_post_css` meta instead. REST-pushed blocks
-   never pass through the editor, so pick the wrong half and the page renders unstyled.
+   get none, and their CSS goes into the `_gspb_post_css` meta instead, written by
+   `WP.push_page()`. REST-pushed blocks never pass through the editor, so pick the wrong
+   half and the page renders unstyled. Do not re-emit the theme's `.wp-section` /
+   `.wp-content-wrap` rules; `compile_css()` strips those duplicates.
 2. **Responsive arrays are verified, not assumed.** `styleAttributes` take four-entry
    arrays (desktop, tablet, mobile landscape, mobile portrait). `scripts/probe_responsive.py`
    pushes every shape at a live site and diffs the compiled CSS, so a new plugin version

@@ -69,6 +69,101 @@ CSSRENDER = '1'
 # against a newer plugin shows different values, change them here only.
 BREAKPOINTS = (None, '991.98px', '767.98px', '575.98px')
 
+# The GreenLight theme already prints these on .wp-section / .wp-content-wrap.
+# Re-emitting them as styleAttributes compiles to a .gsbp-xxx rule that
+# duplicates the theme. That is the usual source of "unnecessary CSS" on a
+# Figma-to-blocks build: the design CSS, plus a second copy of the shell.
+# None means "any value that is clearly the theme's own" (its custom property
+# or the documented fallback).
+THEME_SHELL = {
+    'wp-section': {
+        'display': ('flex',),
+        'justify-content': ('center',),
+        'flex-direction': ('column',),
+        'align-items': ('center',),
+        'padding-left': None,
+        'padding-right': None,
+        'margin-top': ('0', '0px'),
+        'margin-bottom': ('0', '0px'),
+        'position': ('relative',),
+    },
+    'wp-content-wrap': {
+        'max-width': ('100%',),
+        'width': None,
+        'display': ('flex',),
+        'flex-direction': ('column',),
+        'align-items': ('center',),
+    },
+}
+
+_THEME_SIDE_PAD = re.compile(
+    r'var\(\s*--wp--spacing--side|min\(\s*3vw\s*,\s*20px\s*\)', re.I)
+_THEME_WIDE = re.compile(r'--wp--style--global--wide-size')
+_THEME_RULE = re.compile(
+    r'((?:\.wp-section|\.wp-content-wrap)(?:[.#][a-zA-Z0-9_-]+)*)\s*\{([^}]*)\}',
+    re.S)
+
+
+def kebab_prop(name):
+    return re.sub(r'(?<!^)(?=[A-Z])', '-', name).lower()
+
+
+def is_theme_shell_decl(classes, prop, value):
+    """True when this declaration is already provided by the theme for `classes`."""
+    value = (value or '').strip()
+    if not value:
+        return False
+    prop = kebab_prop(prop) if re.search(r'[A-Z]', prop) else prop
+    names = classes if isinstance(classes, (list, tuple, set)) else (classes or '').split()
+    for cls in names:
+        allowed = THEME_SHELL.get(cls, {}).get(prop, ())
+        if allowed == ():
+            continue
+        if allowed is None:
+            if prop in ('padding-left', 'padding-right') and _THEME_SIDE_PAD.search(value):
+                return True
+            if prop == 'width' and _THEME_WIDE.search(value):
+                return True
+            continue
+        compact = value.lower()
+        if compact in allowed:
+            return True
+        if compact in ('0', '0px', '0em', '0rem') and '0' in allowed:
+            return True
+    return False
+
+
+def slim_stylesheet(css):
+    """Drop theme-owned declarations from .wp-section / .wp-content-wrap rules.
+
+    Agents following upstream's "use next styles for sections" paste the theme
+    shell into every page <style>. Those rules then ride in a stylemanager and
+    compile_css() ships a second copy. A rule that is only theme defaults is
+    removed; a rule that also sets a real design value keeps the extras.
+    """
+    if not css:
+        return css
+
+    def repl(match):
+        selector, body = match.group(1), match.group(2)
+        classes = re.findall(r'\.(wp-section|wp-content-wrap)', selector)
+        kept = []
+        for decl in body.split(';'):
+            if ':' not in decl:
+                continue
+            prop, _, val = decl.partition(':')
+            prop, val = prop.strip(), val.strip()
+            if not prop:
+                continue
+            if any(is_theme_shell_decl(c, prop, val) for c in classes):
+                continue
+            kept.append('%s:%s' % (prop, val))
+        if not kept:
+            return ''
+        return '%s{%s}' % (selector, ';'.join(kept))
+
+    return _THEME_RULE.sub(repl, css)
+
 # Where the markup is going. Upstream splits the CSS contract by target:
 #   template  patterns, template parts, templates -> CSSRender on every block
 #             carrying styleAttributes or dynamicGClasses
@@ -196,9 +291,14 @@ def compile_css(markup):
     Stylemanager blocks contribute their `dynamicGClasses[].css` and `customCss`
     verbatim, so one call covers a page's own classes and its block styles.
 
+    Theme-shell declarations on `.wp-section` / `.wp-content-wrap` are dropped:
+    the GreenLight theme already prints those rules, and shipping them again is
+    the usual source of CSS the design never asked for. `is_theme_shell_decl()`
+    is the matcher; override a shell property with a different value and it stays.
+
     `scripts/probe_responsive.py --parity` diffs this against the live renderer.
 
-    Returns the CSS string. Pass it to WP.set_post_css(page_id, css).
+    Returns the CSS string. Pass it to WP.push_page() (or WP.set_post_css()).
     """
     rules = []
     for m in re.finditer(r'<!-- wp:greenshift-blocks/element (\{.*?\}) -->', markup, re.S):
@@ -210,14 +310,21 @@ def compile_css(markup):
         # a stylemanager block carries whole CSS strings rather than properties:
         # the class rule (with its media queries) and one string per sub-selector,
         # which is exactly the set the PHP renderer emits for template targets
+        classes = (attrs.get('className') or '').split()
         for cls in attrs.get('dynamicGClasses') or []:
             if cls.get('css'):
-                rules.append(cls['css'])
+                slim = slim_stylesheet(cls['css'])
+                if slim.strip():
+                    rules.append(slim)
             for sel in cls.get('selectors') or []:
                 if sel.get('css'):
-                    rules.append(sel['css'])
+                    slim = slim_stylesheet(sel['css'])
+                    if slim.strip():
+                        rules.append(slim)
         if attrs.get('customCss'):
-            rules.append(attrs['customCss'])
+            slim = slim_stylesheet(attrs['customCss'])
+            if slim.strip():
+                rules.append(slim)
         style = attrs.get('styleAttributes')
         if not style or not bid:
             continue
@@ -225,14 +332,23 @@ def compile_css(markup):
         extra = []
         for prop, value in style.items():
             if prop == 'customCSS_Extra':
-                extra.append(str(value).replace('{CURRENT}', '.' + bid))
+                extra.append(slim_stylesheet(str(value).replace('{CURRENT}', '.' + bid)))
                 continue
             values = value if isinstance(value, list) else [value]
-            kebab = re.sub(r'(?<!^)(?=[A-Z])', '-', prop).lower()
+            kebab = kebab_prop(prop)
+            # A shell default is redundant only while this block has emitted
+            # nothing of its own for the property. Once it has, its .gsbp rule
+            # beats the theme at every width, so a later entry matching the
+            # theme is the breakpoint reset that undoes it: drop that and the
+            # wider value cascades down over the reset the design asked for.
+            emitted = False
             for i, v in enumerate(values[:len(BREAKPOINTS)]):
                 if v in (None, ''):
                     continue
+                if not emitted and is_theme_shell_decl(classes, kebab, v):
+                    continue
                 per_bp[i].append('%s:%s' % (kebab, v))
+                emitted = True
         for i, decls in enumerate(per_bp):
             if not decls:
                 continue
@@ -627,17 +743,12 @@ def section(seed, inner, bg=None, bg_image=None, pad='var(--gt-section-pad, clam
         return block(seed, tag, inner=inner, style=style, classes='gt-section',
                      name=name, alignfull=True, prefix=prefix)
 
-    # The documented full-width shell: `wp-section alignfull` carrying
-    # data-type="section-component", with the side padding and margins coming
-    # from the theme's own variables. Keep the alignfull class, the wide-size
-    # variable and the spacing-side variable; padding top/bottom is yours to set.
+    # The theme already styles `.wp-section` (flex column, side pad, zero
+    # margin). Only vertical padding and optional background belong per block.
+    # Copying the shell here compiled a second copy of the theme onto every
+    # section via `_gspb_post_css`.
     style = {
-        'display': ['flex'], 'justifyContent': ['center'], 'flexDirection': ['column'],
-        'alignItems': ['center'],
-        'paddingLeft': ['var(--wp--spacing--side, min(3vw, 20px))'],
-        'paddingRight': ['var(--wp--spacing--side, min(3vw, 20px))'],
         'paddingTop': [pad], 'paddingBottom': [pad],
-        'marginTop': ['0px'], 'marginBottom': ['0px'], 'position': ['relative'],
     }
     if bg:
         style['backgroundColor'] = [bg]
@@ -837,7 +948,7 @@ def motion_script(js, plugin_url, names=('animate', 'inView', 'scroll', 'stagger
                         prelude='import { %s } from "%s";' % (', '.join(names), src))
 
 
-def contact_lines(seed, lines, classes=None, gap='0.6rem', prefix=''):
+def contact_lines(seed, lines, classes=None, gap='var(--gt-gap-xs, 0.6rem)', prefix=''):
     """Contact details as an <address> with one link (or text) block per line.
 
     lines   [(text, href_or_None), ...]  e.g. [('01233 555 0142', 'tel:+441233555042'),
@@ -1042,21 +1153,30 @@ def has_greenshift_blocks(markup):
     return 'wp:greenshift-blocks/' in (markup or '')
 
 
-def container(seed, inner, width='1290px', name=None, prefix=''):
-    """Centered content column inside a section."""
+def container(seed, inner, width=None, name=None, prefix=''):
+    """Centered content column inside a section.
+
+    The theme already styles `.wp-content-wrap` (max-width 100%, width from
+    `--wp--style--global--wide-size`). Pass `width` only to change the fallback
+    inside that variable; do not re-emit the flex/max-width shell.
+    """
     if BACKEND == 'core':
         # gt-container carries the max-width and centring; core's constrained
         # layout handles the rest
         return block(seed, 'div', inner=inner, name=name, prefix=prefix,
                      classes='gt-container')
-    # documented inner wrapper: width from the theme's wide-size variable
+    style = None
+    if width:
+        # literal override, not the theme variable: wrapping it in
+        # var(--wp--style--global--wide-size, ...) would be a no-op on a live
+        # theme (the variable is defined) and compile_css() would then drop it
+        # as a theme-shell duplicate.
+        style = {'width': [width]}
     return block(seed, 'div', inner=inner, name=name, prefix=prefix,
                  classes='wp-content-wrap',
                  attrs={'data-type': 'content-area-component'},
-                 style={'maxWidth': ['100%'],
-                        'width': ['var(--wp--style--global--wide-size, %s)' % width],
-                        'display': ['flex'], 'flexDirection': ['column'],
-                        'alignItems': ['center']})
+                 extra={'isVariation': 'nocolumncontent'},
+                 style=style)
 
 
 def grid(seed, inner, variant='gt-grid-4', style=None, name=None, prefix=''):
@@ -1100,7 +1220,7 @@ def button(seed, text, href, variant='primary', new_tab=False, prefix=''):
                  classes=cls)
 
 
-def heading(seed, level, text, margin_bottom='1rem', align=None, prefix=''):
+def heading(seed, level, text, margin_bottom='var(--gt-heading-gap, 1rem)', align=None, prefix=''):
     """
     Heading with minimal styling, size/weight/colour come from stylebook element styles.
     Keep one h1 per page; use h2 for sections and h3 for cards.

@@ -41,7 +41,6 @@ def block(seed, tag, inner=None, text=None, style=None, extra=None, html_attrs='
         j["align"] = "full"
     if style:
         j["styleAttributes"] = style
-        j["CSSRender"] = True
     if name:
         j["metadata"] = {"name": name}
     js = json.dumps(j, ensure_ascii=False).replace('--', D)
@@ -56,7 +55,7 @@ def block(seed, tag, inner=None, text=None, style=None, extra=None, html_attrs='
 def img(seed, src, alt, w, h, style):
     i = sid(seed)
     j = {"id": i, "tag": "img", "localId": i, "src": src, "alt": alt,
-         "originalWidth": w, "originalHeight": h, "styleAttributes": style, "CSSRender": "1"}
+         "originalWidth": w, "originalHeight": h, "styleAttributes": style}
     js = json.dumps(j, ensure_ascii=False).replace('--', D)
     return (f'<!-- wp:greenshift-blocks/element {js} -->\n'
             f'<img class="{i}" src="{src}" alt="{alt}" width="{w}" height="{h}" loading="lazy"/>\n'
@@ -72,25 +71,23 @@ VAR_SURFACE = 'var(--gt-surface, #fbf6ec)'
 VAR_SURFACE_ALT = 'var(--gt-surface-alt, #f2e8d6)'
 VAR_TEXT_MUTED = 'var(--gt-text-muted, #8c8172)'
 
-def section(seed, inner, bg=None, bgimg=None, pad='clamp(3.5rem, 7vw, 5rem)', name=None):
-    style = {"display": ["flex"], "justifyContent": ["center"], "flexDirection": ["column"],
-             "alignItems": ["center"], "paddingLeft": ["min(3vw, 20px)"], "paddingRight": ["min(3vw, 20px)"],
-             "paddingTop": [pad], "paddingBottom": [pad], "marginBlockStart": ["0px"]}
+def section(seed, inner, bg=None, bgimg=None, pad='var(--gt-section-pad, clamp(3.5rem, 7vw, 5rem))', name=None):
+    # Theme already styles .wp-section. Only pad + background belong here.
+    style = {"paddingTop": [pad], "paddingBottom": [pad]}
     if bg:
         style["backgroundColor"] = [bg]
     if bgimg:
         style["backgroundImage"] = [f"url({bgimg})"]
         style["backgroundSize"] = ["cover"]
         style["backgroundPosition"] = ["center center"]
-    return block(seed, 'section', inner=inner, style=style,
+    return block(seed, 'section', inner=inner, style=style, gclass='wp-section',
+                 html_attrs='data-type="section-component"',
                  extra={"isVariation": "contentwrapper"}, name=name, alignfull=True)
 
 def content(seed, inner, extra_style=None, name=None):
-    style = {"maxWidth": ["100%"], "width": ["1290px"], "display": ["flex"],
-             "flexDirection": ["column"], "alignItems": ["center"]}
-    if extra_style:
-        style.update(extra_style)
-    return block(seed, 'div', inner=inner, style=style, name=name)
+    # Theme already styles .wp-content-wrap. extra_style is for design overrides.
+    return block(seed, 'div', inner=inner, style=extra_style, name=name,
+                 gclass='wp-content-wrap', html_attrs='data-type="content-area-component"')
 
 def hero_card(seed, eyebrow_cls, eyebrow, h1txt, lead, maxw='640px', align='center'):
     inner = block(seed + 'eb', 'div', text=eyebrow, gclass=eyebrow_cls, name='Eyebrow')
@@ -119,20 +116,20 @@ def cta_purple(seed, h2txt, para, buttons):
     inner += btnrow(seed + 'btns', buttons)
     card = block(seed + 'card', 'div', inner=inner, style={"maxWidth": ["640px"], "width": ["100%"]},
                  gclass='gt-card-overlay', name='CTA Card')
-    return section(seed + 'sec', card, bgimg=f"{U}/gt-cta-purple-bg.jpg", pad='clamp(3.75rem, 7vw, 5.5rem)', name='CTA Section')
+    return section(seed + 'sec', card, bgimg=f"{U}/gt-cta-purple-bg.jpg", pad='var(--gt-section-pad-lg, clamp(3.75rem, 7vw, 5.5rem))', name='CTA Section')
 
 pages = {}
 
 # ============ ABOUT ============
 s = 'ab1'
 hero = section(s + 'hero',
-    block(s + 'wrap', 'div',
-          inner=hero_card(s, 'gt-eyebrow', 'Our Story', 'A little shop with a big welcome',
+    content(s + 'wrap',
+          hero_card(s, 'gt-eyebrow', 'Our Story', 'A little shop with a big welcome',
                           'A cozy, casual spot for modern apparel and accessories — curated with care, in the heart of Ashford.',
                           maxw='560px', align='left'),
-          style={"maxWidth": ["100%"], "width": ["1290px"], "display": ["flex"], "justifyContent": ["flex-start"]},
+          extra_style={"justifyContent": ["flex-start"]},
           name='Hero Row'),
-    bgimg=f"{U}/gt-mural-bg.jpg", pad='clamp(4rem, 8vw, 6rem)', name='About Hero')
+    bgimg=f"{U}/gt-mural-bg.jpg", pad='var(--gt-section-pad-xl, clamp(4rem, 8vw, 6rem))', name='About Hero')
 
 who_text = block(s + 'wt', 'div', inner=
     block(s + 'web', 'div', text='Who We Are', gclass='gt-eyebrow', name='Eyebrow') +
@@ -196,7 +193,7 @@ pages['about'] = block(s + 'page', 'div', inner=hero + who + mission + love + ct
 s = 'cl1'
 hero_c = section(s + 'hero', hero_card(s, 'gt-eyebrow', 'The Collection', 'Shop the collection',
     'A curated edit of modern apparel and accessories — versatile pieces made to be worn again and again. Browse online, shop in-store.'),
-    bgimg=f"{U}/gt-mural-bg.jpg", pad='clamp(3.75rem, 7vw, 5.5rem)', name='Collection Hero')
+    bgimg=f"{U}/gt-mural-bg.jpg", pad='var(--gt-section-pad-lg, clamp(3.75rem, 7vw, 5.5rem))', name='Collection Hero')
 
 chips = [('All','all'),('Dresses','dresses'),('Tops','tops'),('Knitwear','knitwear'),('Outerwear','outerwear'),('Accessories','accessories'),('New Arrivals','new-arrivals')]
 chiprow = block(s + 'chips', 'div', inner=''.join(
@@ -268,7 +265,7 @@ pages['collection'] = block(s + 'page', 'div', inner=hero_c + grid_c + cta_c,
 s = 'ct1'
 hero_t = section(s + 'hero', hero_card(s, 'gt-eyebrow', 'Say Hello', "Let's talk",
     "Questions about a piece, your size, or store hours? Drop us a line or come on in — we'd love to help."),
-    bgimg=f"{U}/gt-mural-bg.jpg", pad='clamp(3.75rem, 7vw, 5.5rem)', name='Contact Hero')
+    bgimg=f"{U}/gt-mural-bg.jpg", pad='var(--gt-section-pad-lg, clamp(3.75rem, 7vw, 5.5rem))', name='Contact Hero')
 
 def info_row(seed, icon, label, lines):
     txt = ''.join(block(seed + 't' + str(i), 'div', text=l, style={"fontSize": ["15px"], "color": ["var(--gt-text, #33291f)"]}) for i, l in enumerate(lines))

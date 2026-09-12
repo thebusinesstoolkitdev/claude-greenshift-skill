@@ -27,6 +27,55 @@ import urllib.request
 UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
       '(KHTML, like Gecko) Chrome/124.0 Safari/537.36')
 
+# Apache CGI/FastCGI and some LiteSpeed setups strip Authorization before PHP
+# sees it (RFC 3875). The same Basic credential is sent on these headers, which
+# those servers leave alone. WordPress core ignores them unless something puts
+# the value back: `reference/auth-fallback.php` (this skill) or WPVibe if it is
+# already installed. A 401 that looks like "not logged in" also retries once
+# on `?rest_route=`, which some hosts populate differently.
+AUTH_FALLBACK_HEADER = 'X-Greenlight-Authorization'
+WPVIBE_AUTH_HEADER = 'X-WPVibe-Authorization'
+
+# GreenLight's page stylesheet. Underscore-prefixed, so WordPress treats it as
+# protected meta: a generic page update silently drops it, and `update_page()`
+# clears it by default. The only supported write is `set_post_css()` /
+# `push_page()`.
+POST_CSS_META = '_gspb_post_css'
+
+_WRONG_PASSWORD = ('incorrect_password', 'incorrect_application_password',
+                   'application_passwords_disabled')
+
+
+def auth_headers(basic_b64):
+    """Standard Basic header plus the two fallbacks hosts do not strip."""
+    value = 'Basic ' + basic_b64
+    return {
+        'Authorization': value,
+        AUTH_FALLBACK_HEADER: value,
+        WPVIBE_AUTH_HEADER: value,
+    }
+
+
+def is_stripped_auth(status, body):
+    """True when a 401 looks like the host dropped the credential, not a bad one."""
+    if status != 401:
+        return False
+    text = (body or '').lower()
+    return not any(token in text for token in _WRONG_PASSWORD)
+
+
+def reject_css_in_payload(extra):
+    """Raise if a generic page write tries to smuggle `_gspb_post_css`."""
+    extra = extra or {}
+    meta = extra.get('meta') if isinstance(extra.get('meta'), dict) else {}
+    if POST_CSS_META in extra or POST_CSS_META in meta:
+        raise ValueError(
+            '%s is protected post meta. WordPress REST silently drops it from a '
+            'generic page update, and update_page() clears it by default. Write '
+            'it with WP.set_post_css() or WP.push_page(), which treat it as the '
+            'page stylesheet on purpose.' % POST_CSS_META
+        )
+
 
 def load_env(path='.env'):
     """Load KEY=VALUE lines from a .env file into os.environ (does not overwrite existing)."""
@@ -102,7 +151,8 @@ class WP:
             json.dumps(payload).encode() if payload is not None else None)
         req = urllib.request.Request(
             url, data=data, method=method or ('POST' if data is not None else 'GET'))
-        req.add_header('Authorization', 'Basic ' + self.auth)
+        for key, value in auth_headers(self.auth).items():
+            req.add_header(key, value)
         # Cloudflare and most security plugins 403 the default Python-urllib
         # agent, which fails on the very first call of a build.
         req.add_header('User-Agent', UA)
@@ -114,7 +164,14 @@ class WP:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                 body = resp.read().decode('utf-8', 'replace')
         except urllib.error.HTTPError as exc:
-            raise WPError(exc.code, exc.read().decode('utf-8', 'replace')) from None
+            body = exc.read().decode('utf-8', 'replace')
+            if (self.rest_style == 'pretty' and is_stripped_auth(exc.code, body)):
+                # Host stripped Authorization on /wp-json/. ?rest_route= often
+                # still sees it; stay on query style after the first hit.
+                self.rest_style = 'query'
+                return self.request(route, payload=payload, method=method,
+                                    raw_body=raw_body, headers=headers)
+            raise WPError(exc.code, body) from None
         if not body:
             return None
         try:
@@ -221,23 +278,61 @@ class WP:
     # ---------- pages ----------
 
     def create_page(self, title, slug, content, status='draft', template='no-title', **extra):
+        reject_css_in_payload(extra)
         payload = {'title': title, 'slug': slug, 'status': status,
                    'content': content, 'template': template}
         payload.update(extra)
         return self.post('wp/v2/pages', payload)
 
     def update_page(self, page_id, content=None, clear_css=True, **extra):
+        """Low-level page write. Prefer `push_page()` for any page that has CSS.
+
+        `clear_css=True` wipes `_gspb_post_css` after the content write. That is
+        correct only on the CSSRender (template) path. On a page the meta field
+        *is* the stylesheet, so this default is a footgun: an agent that calls
+        `set_post_css()` then `update_page()` loses every rule. `push_page()`
+        writes both in the safe order and never clears.
+        """
+        reject_css_in_payload(extra)
         payload = dict(extra)
         if content is not None:
             payload['content'] = content
         page = self.post(f'wp/v2/pages/{page_id}', payload)
         if content is not None and clear_css:
-            # Only valid on the CSSRender path, where the server compiles CSS from
-            # block attributes and stale meta would shadow it. On the documented
-            # page path this field IS the page's stylesheet, so clearing it here
-            # wipes what set_post_css() just wrote. Pass clear_css=False, or call
-            # set_post_css() after this.
             self.clear_post_css(page_id)
+        return page
+
+    def push_page(self, page_id=None, content=None, css=None, title=None,
+                  slug=None, status='draft', **extra):
+        """Write page markup and its CSS over REST, in the only order that works.
+
+        WordPress does not compile GreenLight CSS on a REST write. Gutenberg
+        does that on editor save, and this skill never opens the editor. Pages
+        therefore need two REST calls, content then `_gspb_post_css`, and they
+        must not clear the meta in between.
+
+            wp.push_page(page_id, content=html)                 # update
+            wp.push_page(content=html, title='Home', slug='home')  # create draft
+
+        `css` defaults to `blocks.compile_css(content)`, which already drops
+        theme-shell duplicates. Do not paste into Gutenberg, write theme files,
+        use WP-CLI, or POST `/wp/v2/pages/{id}/meta` (that route does not exist).
+        """
+        extra.pop('status', None)
+        reject_css_in_payload(extra)
+        if content is None:
+            raise ValueError('push_page needs content')
+        if css is None:
+            # local import: wp_api is usable without the rest of the skill
+            import blocks  # noqa: E402
+            css = blocks.compile_css(content)
+        if page_id:
+            page = self.update_page(page_id, content=content, clear_css=False, **extra)
+        else:
+            if not title:
+                raise ValueError('push_page needs title (and usually slug) to create')
+            page = self.create_page(title, slug or '', content, status=status, **extra)
+        self.set_post_css(page['id'], css)
         return page
 
     def clear_post_css(self, post_id):
@@ -267,16 +362,22 @@ class WP:
         return self.post('greenshift/v1/update-custom-js', {'js': payload})
 
     def set_post_css(self, post_id, css):
-        """Write a page's compiled CSS to _gspb_post_css.
+        """Write a page's compiled CSS to `_gspb_post_css` on purpose.
 
-        This is the documented contract for pages and posts, which do not carry
-        CSSRender. Pair it with blocks.compile_css() over the markup you pushed:
-
-            html = build_page()
-            wp.update_page(pid, content=html)
-            wp.set_post_css(pid, blocks.compile_css(html))
+        Unpatched GreenLight 3.3.7 ran `css_settings` through `sanitize_text_field`,
+        which collapsed whitespace and stripped SVG data URIs. The lossless write
+        is the page `meta` field (registered `show_in_rest`). `css_settings` is
+        the fallback for hosts that block meta. Do not use `/wp/v2/pages/{id}/meta`.
+        Prefer `push_page()`, which calls this after the content write.
         """
-        return self.post('greenshift/v1/css_settings', {'id': post_id, 'css': css})
+        try:
+            return self.post('wp/v2/pages/%s' % post_id, {
+                'meta': {POST_CSS_META: css},
+            })
+        except WPError as exc:
+            if exc.status not in (401, 403, 404, 500):
+                raise
+            return self.post('greenshift/v1/css_settings', {'id': post_id, 'css': css})
 
     # ---------- template parts ----------
 
@@ -359,11 +460,13 @@ class WP:
     def gs_settings(self):
         """Current GreenLight global settings dict (stylebook).
 
-        Writes go to `global_settings`; reads come from `figma_settings`, which
-        is the endpoint upstream documents for reading and the one that returns
-        the stored variables and classes. A GET on `global_settings` answers with
-        empty lists for both while the front end renders them, so verify against
-        the wrong endpoint reported 0/0 on a populated stylebook.
+        Writes go to `global_settings` with native keys (`variables`, `colours`,
+        `global_classes`, `elements`, `gradients`). Do not send `figma_fonts` /
+        `figma_colors` / `figma_classes` from this client: those merge helpers
+        in unpatched 3.3.7 json_encode arrays the frontend foreachs, skip the
+        first class (`if ($index)`), and miss existing font families. Reads
+        still come from `figma_settings` because a GET on `global_settings` can
+        answer with empty lists while the front end renders them.
         """
         # GETs on these routes are served from the host's page cache for a while
         # after a write, answering with the previous (often empty) lists; a unique
@@ -401,14 +504,24 @@ class WP:
         return self.post('greenshift/v1/global_settings', payload)
 
     def gs_upsert_classes(self, new_classes):
-        """Add or replace global classes by their `value` key, preserving the rest."""
+        """Add or replace global classes by their `value` key, preserving the rest.
+
+        Each class needs `originalBlock` (the Stylebook admin screen crashes
+        without it) and `type`. Missing keys are filled in.
+        """
         def merge(existing):
+            if isinstance(existing, str):
+                existing = json.loads(existing)
+            existing = list(existing or [])
             index = {c.get('value'): i for i, c in enumerate(existing)}
             for cls in new_classes:
-                if cls['value'] in index:
-                    existing[index[cls['value']]] = cls
+                filled = dict(cls)
+                filled.setdefault('originalBlock', 'greenshift-blocks/element')
+                filled.setdefault('type', 'global')
+                if filled['value'] in index:
+                    existing[index[filled['value']]] = filled
                 else:
-                    existing.append(cls)
+                    existing.append(filled)
             return existing
         return self.gs_merge(global_classes=merge)
 

@@ -1,8 +1,8 @@
 ---
 name: greenlight
 description: >
-  Builds WordPress sites over the REST API, from a Figma file, a .pen file, screenshots or
-  a sketch, without opening the block editor. It extracts the design, converts and uploads
+  Builds WordPress sites over the REST API, from a Paper .pen file (preferred), a Figma
+  file, screenshots or a sketch, without opening the block editor. It extracts the design, converts and uploads
   the images, pushes a token-based stylebook, generates Gutenberg blocks, and wires up the
   pages, the FSE header and footer, the contact form, SMTP and SEO. One set of generator
   calls emits either native WordPress core blocks or GreenLight element blocks.
@@ -19,6 +19,15 @@ description: >
 Turn a design into a finished, launch-ready WordPress site without touching the block
 editor. Everything, styles, pages, header, footer, forms, SEO, is pushed over REST, so
 the whole build is scriptable, reviewable, and repeatable.
+
+## Before anything else: check for updates
+
+Run `python scripts/check_update.py` at the start of every session that uses this skill.
+If it reports an update, **stop and tell the user first** — say their local copy is out
+of date, give them the exact command it prints (`git -C <skill dir> pull`), and ask
+whether to update now before continuing. Do not silently build on a stale copy: the
+API behaviour recorded here changes with each GreenLight/GreenShift release, and an old
+skill produces confidently wrong markup.
 
 ## Two engines, one set of calls
 
@@ -87,8 +96,27 @@ Rules 1-3 are GreenLight-backend specific. Rule 4 applies to both.
    pass through the editor, so nothing compiles their CSS; pick the wrong half of this
    contract and the page renders unstyled.
 
+   **Do not re-emit the theme shell.** `.wp-section` and `.wp-content-wrap` are already
+   styled by the theme (flex column, side pad, wide-size width). `section()` only sets
+   vertical padding and optional background. Pasting upstream's "use next styles for
+   sections" block into the page stylesheet, or copying those declarations onto every
+   section as `styleAttributes`, is the usual source of CSS the design never asked for.
+   `compile_css()` strips theme-shell duplicates if they sneak in.
+
+   **Push a page with `WP.push_page()`, nothing else.** WordPress has no file write from
+   this skill. Gutenberg save is what compiles CSS, and REST never goes through Gutenberg.
+   `push_page()` writes content with `clear_css=False`, then stores the compiled CSS in
+   `_gspb_post_css` via the page `meta` field (lossless). `css_settings` is the fallback
+   because unpatched 3.3.7 ran that endpoint through `sanitize_text_field`. A patched
+   copy of this plugin also auto-compiles `styleAttributes` into that meta on REST
+   insert when the content has no `inlineCssStyles`, so a content-only write still
+   styles. Do not paste into the editor, write PHP/CSS files, use WP-CLI,
+   POST `/wp/v2/pages/{id}/meta` (that route does not exist), put a `<style>`
+   in `core/html`, or add CSSRender on a page. `update_page()` still clears the stylesheet
+   by default; that is a template-part footgun, not the page path.
+
    `blocks.set_target('page')` omits CSSRender, and `blocks.compile_css(markup)` builds the
-   string for `WP.set_post_css()`. Default is `template`, correct for the header and footer,
+   string `push_page()` stores. Default is `template`, correct for the header and footer,
    which are template parts.
 2. **Responsive arrays work over REST; the constraint is who compiles them.**
    `styleAttributes` values are four-entry arrays,
@@ -136,7 +164,7 @@ markup. `reference/troubleshooting.md` has the full symptom-first list.
 WP_URL=https://site.com
 WP_USER=admin@example.com
 WP_APP_PASSWORD=xxxx xxxx xxxx xxxx xxxx xxxx   # Users -> Profile -> Application Passwords
-FIGMA_TOKEN=figd_...                            # Figma input only
+FIGMA_TOKEN=figd_...                            # Figma adapter only; Paper needs the desktop MCP, not a token
 ```
 
 Verify before building anything:
@@ -146,6 +174,14 @@ from scripts.wp_api import WP
 print(WP().check())   # expect is_admin True, greenshift True
 ```
 
+Every REST call sends the application password on `Authorization` and again on
+`X-Greenlight-Authorization` (and `X-WPVibe-Authorization` if that plugin is already
+there). Apache CGI/FastCGI often strips the first header; a 401 that looks like "not
+logged in" retries once on `?rest_route=`. If that still 401s, drop
+`reference/auth-fallback.php` in `wp-content/mu-plugins/` so WordPress sees the second
+header. `_gspb_post_css` is written only by `WP.push_page()` / `WP.set_post_css()`; a
+generic page update silently drops it.
+
 Project layout: `input/` design refs · `assets/` optimised images · `output/` generated
 block HTML · `reference/` node dumps and media map · `scripts/` generators.
 
@@ -154,15 +190,62 @@ and backups, do not install plugins that duplicate them.
 
 ## Design sources
 
-- **Figma**. REST API directly, no MCP needed. `GET /v1/files/{key}?depth=2` for the frame
-  list, `/v1/files/{key}/nodes?ids=…` for full trees (pull every text string, font, colour
-  and image fill), `/v1/images/{key}?ids=…&format=png&scale=2` to export assets. Header
-  `X-Figma-Token`.
-- **Paper (.pen)**, the Paper/pencil MCP tools. Read the schema first, then the node tree,
-  then a screenshot for visual reference; export assets through the MCP. Never read `.pen`
-  files directly.
-- **Screenshots / sketches**, read the image, infer the structure, and confirm before
-  building.
+One write path, three read adapters. The write path never changes: tokens into the
+stylebook, images into `wp/v2/media`, vanilla HTML through `scripts/convert_html.py`,
+then `WP.push_page()`. Figma, Paper and screenshots only fill an intermediate:
+section map, tokens, media list, HTML. WordPress never sees the design tool.
+
+**Paper is the default source.** It is already HTML/CSS with flex layout, which is
+what `convert.js` wants. Figma REST stays as a dying adapter while files move. A
+screenshot is last resort.
+
+### Paper (.pen)
+
+Paper Desktop must be open; the MCP is `http://127.0.0.1:29979/mcp`. Never read
+`.pen` files from disk. If the MCP is missing, stop and say so; do not guess the
+tree from a screenshot of the canvas.
+
+Extract in this order, then get the section map approved before generating:
+
+1. `get_basic_info` — artboards are pages or breakpoints. Name them.
+2. `get_tree_summary` — draft the section map (hero, features, CTA…).
+3. `get_computed_styles` + `get_node_info` — copy, type, fonts, colours, spacing.
+4. `get_jsx` **inline-styles format**, never Tailwind. Paper's own "build a website"
+   guide emits React + Tailwind; GreenLight forbids both. Rewrite that dump to
+   vanilla HTML with prefixed classes before `convert.js` runs.
+5. `export` / `get_fill_image` — photos and icons through `prep_images.py`. Do not
+   rebuild a section from one giant PNG.
+6. `get_screenshot` — visual reference, then QA against the live page.
+
+**Paper file conventions** (garbage in still garbage out):
+
+- Flex / stacked frames, not absolute soup.
+- One artboard per page; extra artboards named for breakpoints if they exist.
+- Top-level frames named as sections (`hero`, `features`, `cta`).
+- Colour and type live in Paper tokens, not one-off hex on leaves.
+- Real text in the file. No Lorem that has to be invented later.
+
+Rewrite Paper output to the HTML `convert.js` will keep: unique prefixed classes
+(minimum four letters), styles in `<style data-wp-block-html="css">` on a classed
+parent, no `:root`, no `* {}`, no Tailwind, no React. Use the `wp-section` /
+`wp-content-wrap` **markup** for full-bleed bands; do **not** paste the theme's
+`.wp-section` CSS into the page stylesheet, the theme already prints it.
+
+Paper tokens map to native stylebook keys (`variables`, `colours`, `global_classes`)
+via GET-merge-write. Do not send `figma_*` keys; stock 3.3.7 merges them badly.
+
+### Figma (adapter only)
+
+REST, no MCP. `GET /v1/files/{key}?depth=2` for the frame list,
+`/v1/files/{key}/nodes?ids=…` for trees, `/v1/images/{key}?ids=…&format=png&scale=2`
+for assets. Header `X-Figma-Token`. Dump into the same section map / tokens / HTML
+intermediate as Paper. During the switch, Paper's `get_guide` (figma-import) can
+move a file into Paper first; that is better than keeping two extractors forever.
+
+### Screenshots / sketches
+
+Read the image, infer the structure, and confirm the section map before building.
+Use this only when Paper and Figma are unavailable.
 
 Always produce a **section map** (hero, features, CTA…) and get it approved before
 generating. It is the cheapest place to catch a misread.
@@ -392,9 +475,12 @@ A full-width section with centred content has a prescribed structure. `section()
 ```
 
 Keep the `alignfull` class, `var(--wp--style--global--wide-size, 1200px)` for the inner
-width, and `var(--wp--spacing--side, min(3vw, 20px))` for side padding. Padding top and
-bottom are yours; those three are not. Inventing your own section class instead is what
-produces inter-section seams and a width that disagrees with the theme.
+width, and `var(--wp--spacing--side, min(3vw, 20px))` for side padding. **Do not copy the
+theme's `.wp-section` / `.wp-content-wrap` CSS into the page.** The theme already prints
+those rules. Padding top and bottom, plus optional background, are yours; the flex
+column, side pad, zero margin and wide-size width are not. Inventing your own section
+class instead is what produces inter-section seams and a width that disagrees with the
+theme.
 
 ## Where a page's CSS lives
 
@@ -404,7 +490,7 @@ Three mechanisms, and picking the wrong one is the most common way to ship an un
 |---|---|
 | site-wide tokens and shared classes | the stylebook (`global_settings`), or the FSE global-styles record on the core backend |
 | one page's own classes | a **stylemanager** block: `style_manager(seed, classes={'home-hero': '.home-hero{…}'})`, emitting `isVariation:"stylemanager"` with `dynamicGClasses` in the converter's shape |
-| a page's compiled block styles | `_gspb_post_css`, written by `WP.set_post_css()` from `compile_css()`, which folds the stylemanager's CSS in too |
+| a page's compiled block styles | `_gspb_post_css`, written by `WP.push_page()` from `compile_css()`, which folds the stylemanager's CSS in too |
 
 What the PHP renderer behind `CSSRender` actually emits, probed on a live install: plain
 `styleAttributes` properties (responsive arrays included), `dynamicGClasses[].css` and
@@ -422,8 +508,9 @@ hidden mobile panel into a fixed full-height overlay across the whole site. The 
 "CSSRender on anything with styleAttributes" applies to your blocks only.
 
 **`update_page()` clears `_gspb_post_css` by default.** That is correct on the CSSRender
-path and destructive on the page path, where the field *is* the stylesheet. Pass
-`clear_css=False` when you are about to call `set_post_css()`.
+path and destructive on the page path, where the field *is* the stylesheet. Use
+`WP.push_page()` for pages: it writes content with `clear_css=False` and then stores the
+compiled CSS, falling back to the page `meta` field if `css_settings` is blocked.
 
 ## Generating pages
 
@@ -491,11 +578,13 @@ deliberately changing state, never on every push. A helper that always sends
 REST write can flip a draft to published as a side effect. Read the statuses back after any
 bulk update.
 
-Push: `POST /wp/v2/pages {"title","slug","status":"draft","content":…,"template":"no-title"}`
-to create; `{"content":…}` alone to update.
-The `no-title` template stops the theme printing the page title as a second `h1`; confirm
-the slug in `GET /wp/v2/templates`. After any content update clear stale editor CSS with
-`POST /greenshift/v1/css_settings {"id":…,"css":""}` (`WP.update_page()` does it for you).
+Push pages with `WP.push_page()`, not a raw content POST. It creates or updates over
+`/wp/v2/pages` (create sends `status:"draft"` and `template:"no-title"`; update sends
+`{"content":…}` only) and then writes the compiled CSS to `_gspb_post_css`. Do not clear
+that field afterwards. The `no-title` template stops the theme printing the page title
+as a second `h1`; confirm the slug in `GET /wp/v2/templates`. Template parts still use
+`update_page(..., clear_css=True)` / CSSRender, because there the meta would shadow the
+server-compiled rules.
 
 ## Header and footer (FSE template parts)
 

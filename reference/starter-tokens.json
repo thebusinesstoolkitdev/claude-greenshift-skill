@@ -271,6 +271,42 @@
    "kind": "spacing"
   },
   {
+   "name": "gt-section-pad-lg",
+   "variable": "--gt-section-pad-lg",
+   "variable_value": "clamp(3.75rem, 7vw, 5.5rem)",
+   "label": "gt-section-pad-lg",
+   "value": "var(--gt-section-pad-lg)",
+   "group": "imported",
+   "kind": "spacing"
+  },
+  {
+   "name": "gt-section-pad-xl",
+   "variable": "--gt-section-pad-xl",
+   "variable_value": "clamp(4rem, 8vw, 6rem)",
+   "label": "gt-section-pad-xl",
+   "value": "var(--gt-section-pad-xl)",
+   "group": "imported",
+   "kind": "spacing"
+  },
+  {
+   "name": "gt-heading-gap",
+   "variable": "--gt-heading-gap",
+   "variable_value": "1rem",
+   "label": "gt-heading-gap",
+   "value": "var(--gt-heading-gap)",
+   "group": "imported",
+   "kind": "spacing"
+  },
+  {
+   "name": "gt-gap-xs",
+   "variable": "--gt-gap-xs",
+   "variable_value": "0.6rem",
+   "label": "gt-gap-xs",
+   "value": "var(--gt-gap-xs)",
+   "group": "imported",
+   "kind": "spacing"
+  },
+  {
    "name": "gt-card-pad",
    "variable": "--gt-card-pad",
    "variable_value": "clamp(1.5rem, 4vw, 3rem) clamp(1.2rem, 3.5vw, 2.5rem)",

@@ -19,6 +19,7 @@ Checks, all of them things that have actually shipped broken:
   * CSSRender matches the target: "1" on template parts, absent on pages
   * no literal `--` inside block JSON
   * block comments balance
+  * `.wp-section` / `.wp-content-wrap` do not re-emit theme-shell CSS
 """
 import io
 import json
@@ -27,15 +28,46 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from blocks import _RENDERED_ATTRS, CSSRENDER  # noqa: E402
+from blocks import _RENDERED_ATTRS, CSSRENDER, is_theme_shell_decl  # noqa: E402
 
 BLOCK = re.compile(r'<!-- wp:greenshift-blocks/element (\{.*?\}) -->\s*(<[^>]*>)', re.S)
 ATTR = re.compile(r'([a-zA-Z_:][-\w:.]*)\s*=\s*"([^"]*)"')
 # emitted by GreenLight from its own keys, or produced by the renderer itself
 DERIVED = _RENDERED_ATTRS | {'id', 'style', 'decoding', 'fetchpriority', 'viewbox'}
 
+SPACING_KEYS = {
+    'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+    'margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft',
+    'blockGap', 'gap', 'rowGap', 'columnGap',
+}
+# not design decisions, so there is no token for them to reference
+SPACING_EXEMPT = {'auto', 'inherit', 'initial', 'unset', 'revert', 'normal', 'none'}
+ZERO = re.compile(r'^0(\.0+)?[a-z%]*$', re.I)
 
-def audit(path, target='template'):
+
+def literal_spacing(style):
+    """Yield (key, value) for each spacing value that references no custom property.
+
+    A hard-coded length is not wrong on its own; it is wrong because the stylebook
+    already defines the rhythm. Overriding it leaves --gt-section-pad and friends
+    defined and unreferenced, which verify.py cannot see: it only computes
+    `used - tokens`, so a token nothing uses is indistinguishable from a healthy one.
+    """
+    for key, raw in (style or {}).items():
+        if key not in SPACING_KEYS:
+            continue
+        for value in (raw if isinstance(raw, list) else [raw]):
+            if not isinstance(value, str):
+                continue
+            text = value.strip()
+            if not text or 'var(' in text:
+                continue
+            if text.lower() in SPACING_EXEMPT or ZERO.match(text):
+                continue
+            yield key, text
+
+
+def audit(path, target='template', check_tokens=True):
     src = io.open(path, encoding='utf-8').read()
     problems = []
 
@@ -136,12 +168,42 @@ def audit(path, target='template'):
             problems.append('%s: CSSRender is %r, expected the string %r'
                             % (bid, cr, CSSRENDER))
 
+        if check_tokens:
+            for key, value in literal_spacing(attrs.get('styleAttributes')):
+                problems.append('%s: %s is the literal %r and references no spacing '
+                                'token. The stylebook owns the rhythm; hard-coding a '
+                                'length here leaves its token defined and unused, and '
+                                'the next scale change moves every section but this '
+                                'one. Pass var(%sgt-section-pad) or define a token'
+                                % (bid, key, value, '--'))
+
+        classes = (attrs.get('className') or html_attrs.get('class') or '').split()
+        for key, raw in (attrs.get('styleAttributes') or {}).items():
+            if key == 'customCSS_Extra':
+                continue
+            values = [v for v in (raw if isinstance(raw, list) else [raw])
+                      if isinstance(v, str) and v.strip()]
+            # Only a wholly redundant declaration is a duplicate. A mixed array
+            # is a responsive pattern whose shell-matching entry is a breakpoint
+            # reset, and telling the author to remove it moves the value it was
+            # resetting into the wrong breakpoint.
+            if values and all(is_theme_shell_decl(classes, key, v) for v in values):
+                problems.append(
+                    '%s: %s=%s duplicates the theme shell on %s. The theme '
+                    'already prints this on .wp-section / .wp-content-wrap; '
+                    'leave it off the block so compile_css() does not ship a '
+                    'second copy.' % (bid, key, ', '.join(repr(v) for v in values),
+                                      ' '.join(c for c in classes
+                                               if c in ('wp-section', 'wp-content-wrap'))))
+
     return seen, problems
 
 
 def main():
     argv = sys.argv[1:]
     target = 'template'
+    check_tokens = '--no-token-check' not in argv
+    argv = [a for a in argv if a != '--no-token-check']
     if '--target' in argv:
         i = argv.index('--target')
         target = argv[i + 1] if i + 1 < len(argv) else 'template'
@@ -155,7 +217,7 @@ def main():
         return 2
     total = 0
     for path in args:
-        seen, problems = audit(path, target)
+        seen, problems = audit(path, target, check_tokens)
         total += len(problems)
         mark = 'ok ' if not problems else 'BAD'
         print('%s %s  %d blocks, target=%s' % (mark, path, seen, target))

@@ -15,14 +15,40 @@ _GreenLight backend only._
 **Symptom**. Page structure is right, content is right, everything is unstyled. Block
 `gsbp-xxxxxxx` classes are in the HTML but no matching CSS rules anywhere.
 
-**Cause**. GreenLight normally compiles block CSS *in the editor* on save. Blocks pushed
-over the REST API never pass through the editor, so nothing compiles them.
+**Cause**. GreenLight compiles block CSS *in the editor* on save. Blocks pushed over REST
+never pass through the editor, so nothing compiles them. An earlier version of this
+entry said to add `"CSSRender": true` on every block. That is the template-part
+contract, and on a page it is the wrong half: pages carry **no** CSSRender, and their
+CSS lives in `_gspb_post_css`. The other usual cause is `update_page()` clearing that
+meta after `set_post_css()` wrote it.
 
-**Fix**. Add `"CSSRender": true` to every block that carries `styleAttributes`. This tells
-the server to compile the styles at render time. `blocks.block()` does this automatically.
+**Fix**. `WP.push_page(page_id, content=html)`. It writes the markup with
+`clear_css=False`, compiles CSS (theme-shell duplicates already stripped), and stores
+it via `greenshift/v1/css_settings`, falling back to the page `meta` field if that
+endpoint is blocked. Template parts still get `"CSSRender": "1"` (the string, not a
+boolean) from `blocks.block()` when the target is `template`.
 
 **Check**, `python scripts/verify.py <url>` reports `blocks: N, with CSS: M`. If M is 0,
 this is your problem.
+
+---
+
+## REST calls 401 even though the application password is valid
+
+**Symptom**. `WP().check()` or the first page write returns HTTP 401
+`rest_not_logged_in` / `rest_forbidden`. Reconnecting with a new password does not help.
+A browser login to wp-admin works.
+
+**Cause**. Apache running PHP as CGI/FastCGI, and some LiteSpeed setups, strip the
+`Authorization` header before PHP sees it (RFC 3875). WordPress then treats every
+scripted call as anonymous. A wrong password looks different: the body contains
+`incorrect_password` or `incorrect_application_password`.
+
+**Fix**. `wp_api.py` already sends the same Basic credential on
+`X-Greenlight-Authorization` and retries a 401 once on `?rest_route=`. If it still
+fails, copy `reference/auth-fallback.php` into `wp-content/mu-plugins/` so WordPress
+restores the second header before authentication. If WPVibe is already installed, its
+own fallback reads `X-WPVibe-Authorization`, which this client also sends.
 
 ---
 

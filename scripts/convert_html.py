@@ -171,6 +171,7 @@ def main():
     css = None
     if args.target == 'page':
         css = input_css(html) if args.raw_css else blocks.compile_css(markup)
+        css = blocks.slim_stylesheet(css)
         css_path = os.path.splitext(out_path)[0] + '.css'
         io.open(css_path, 'w', encoding='utf-8', newline='\n').write(css)
         print('page css', css_path, '(%d bytes, %s)' % (len(css), 'raw stylesheet' if args.raw_css else 'compiled'))
@@ -199,8 +200,8 @@ def main():
             raise SystemExit('--publish is for page targets; template parts are patched, not created')
         from wp_api import WP
         wp = WP()
-        page = wp.create_page(args.publish, args.slug or name, markup)
-        wp.set_post_css(page['id'], css)
+        page = wp.push_page(content=markup, css=css, title=args.publish,
+                            slug=args.slug or name)
         print('\ndraft page %d  %s' % (page['id'], page.get('link')))
     return 1 if problems else 0
 

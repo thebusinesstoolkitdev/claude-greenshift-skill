@@ -1,10 +1,13 @@
 # claude-greenshift-skill
 
 A [Claude Code](https://claude.com/claude-code) skill for building complete WordPress sites
-on the **GreenLight** block builder (and the **GreenLight** FSE theme) from a design. Figma, Paper, or a screenshot, entirely over the REST API.
+on the **GreenLight** block builder (and the **GreenLight** FSE theme) from a design.
+Penpot, Paper, Pencil, Figma, or a screenshot, entirely over the REST API.
 
-No clicking through the block editor. Design system, pages, header, footer, forms and SEO
-are all pushed as data, so a build is scriptable, reviewable and repeatable.
+Blocks are native GreenShift **element variations** a developer can edit in the page
+editor: FSE `alignfull` sections, inspector backgrounds, theme `wide-size` inner wraps.
+The skill refuses leftover section widths and custom CSS that duplicates what Full Site
+Editing already does.
 
 A four-page site, design tokens, pages, header, footer, responsive layout, accessibility
 pass, takes about an hour end to end.
@@ -41,7 +44,9 @@ if your copy is behind. To update:
 git -C ~/.claude/skills/greenlight pull
 ```
 
-Then start a new session so the updated `SKILL.md` is loaded. Check manually any time
+Then start a new session so the updated `SKILL.md` is loaded. On an existing site, also run
+`python scripts/stylebook.py check` — it detects pages and stylebooks built by an older
+version of the skill and prints the fix. Check manually any time
 with `python scripts/check_update.py` (exit code 1 = update available). Set
 `GREENLIGHT_SKIP_UPDATE_CHECK=1` to silence it, e.g. in CI.
 
@@ -85,6 +90,8 @@ reference/
   auth-fallback.php           mu-plugin: restore Authorization hosts strip
   upstream-block-spec.md      the block format as WPsoul specifies it, with divergences
   site-conventions.md         website practice: measure, links, titles, safe updates
+  fse-and-greenshift.md       FSE widths, inspector backgrounds, element variations
+  design-sources.md           Penpot / Paper / Pencil / Figma / screenshot → blocks
   troubleshooting.md          symptom-first list of every bug that shipped
   launch-checklist.md         ordered, with the manual steps called out
   llms-template.txt           llms.txt scaffold for AI assistants
@@ -99,9 +106,10 @@ examples/
    `"CSSRender": "1"` (the string) on every block with `styleAttributes`; pages and posts
    get none, and their CSS goes into the `_gspb_post_css` meta instead, written by
    `WP.push_page()`. REST-pushed blocks never pass through the editor, so pick the wrong
-   half and the page renders unstyled. Do not re-emit the `.wp-section` /
-   `.wp-content-wrap` shell per block; the stylebook ships those rules once (nothing
-   in the theme styles them) and `compile_css()` strips duplicates.
+   half and the page renders unstyled. Section layout (flex, side padding via the
+   theme token, no width) lives on the section block itself, the way the editor inserts
+   it, so the inspector can edit it; the inner wrap carries the theme's wide-size
+   variable. Nothing in the theme styles `.wp-section` / `.wp-content-wrap`.
 2. **Responsive arrays are verified, not assumed.** `styleAttributes` take four-entry
    arrays (desktop, tablet, mobile landscape, mobile portrait). `scripts/probe_responsive.py`
    pushes every shape at a live site and diffs the compiled CSS, so a new plugin version

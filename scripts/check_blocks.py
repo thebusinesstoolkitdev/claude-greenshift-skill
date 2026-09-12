@@ -19,7 +19,8 @@ Checks, all of them things that have actually shipped broken:
   * CSSRender matches the target: "1" on template parts, absent on pages
   * no literal `--` inside block JSON
   * block comments balance
-  * `.wp-section` / `.wp-content-wrap` do not re-emit theme-shell CSS
+  * full-bleed sections do not set width (FSE alignfull already spans)
+  * nocolumncontent wraps carry the theme wide-size, not the section
 """
 import io
 import json
@@ -158,6 +159,38 @@ def audit(path, target='template', check_tokens=True):
                 problems.append('%s: styleAttributes.customCSS_Extra on a template '
                                 'target never renders; same fix' % bid)
 
+        variation = attrs.get('isVariation')
+        style = attrs.get('styleAttributes') or {}
+        tag_name = (re.match(r'<([a-zA-Z0-9]+)', tag) or [None, ''])[1].lower()
+        is_full_section = (
+            variation in ('contentwrapper', 'contentcolumns')
+            or (attrs.get('align') == 'full' and tag_name == 'section')
+            or 'wp-section' in (html_attrs.get('class') or '').split()
+        )
+        if is_full_section:
+            for key in ('width', 'maxWidth', 'minWidth', 'inlineSize'):
+                if key in style:
+                    problems.append(
+                        '%s: full-bleed section sets styleAttributes.%s=%r. FSE '
+                        'alignfull is already 100%% wide; put measure on the inner '
+                        'nocolumncontent wrap only (reference/fse-and-greenshift.md)'
+                        % (bid, key, style[key]))
+            extra_css = style.get('customCSS_Extra') or ''
+            if re.search(r'(^|[^\w-])(width|max-width|min-width)\s*:', extra_css):
+                problems.append(
+                    '%s: customCSS_Extra sets width on a full-bleed section; the '
+                    'inspector cannot edit that. Use alignfull + inner wide-size'
+                    % bid)
+        if variation == 'nocolumncontent' and 'width' not in style:
+            problems.append(
+                '%s: nocolumncontent wrap missing width: '
+                'var(--wp--style--global--wide-size, 1200px)' % bid)
+        if style.get('customCSS_Extra') and re.search(
+                r'\.wp-section\s*\{|\.wp-content-wrap\s*\{', style.get('customCSS_Extra') or ''):
+            problems.append(
+                '%s: copies .wp-section / .wp-content-wrap CSS; the theme and '
+                'section() already own that shell' % bid)
+
         has_css = ('styleAttributes' in attrs or 'dynamicGClasses' in attrs
                    or 'customCss' in attrs)
         cr = attrs.get('CSSRender')
@@ -177,24 +210,6 @@ def audit(path, target='template', check_tokens=True):
                                 'one. Pass var(%sgt-section-pad) or define a token'
                                 % (bid, key, value, '--'))
 
-        classes = (attrs.get('className') or html_attrs.get('class') or '').split()
-        for key, raw in (attrs.get('styleAttributes') or {}).items():
-            if key == 'customCSS_Extra':
-                continue
-            values = [v for v in (raw if isinstance(raw, list) else [raw])
-                      if isinstance(v, str) and v.strip()]
-            # Only a wholly redundant declaration is a duplicate. A mixed array
-            # is a responsive pattern whose shell-matching entry is a breakpoint
-            # reset, and telling the author to remove it moves the value it was
-            # resetting into the wrong breakpoint.
-            if values and all(is_theme_shell_decl(classes, key, v) for v in values):
-                problems.append(
-                    '%s: %s=%s duplicates the theme shell on %s. The theme '
-                    'already prints this on .wp-section / .wp-content-wrap; '
-                    'leave it off the block so compile_css() does not ship a '
-                    'second copy.' % (bid, key, ', '.join(repr(v) for v in values),
-                                      ' '.join(c for c in classes
-                                               if c in ('wp-section', 'wp-content-wrap'))))
 
     return seen, problems
 

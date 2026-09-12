@@ -72,22 +72,32 @@ VAR_SURFACE_ALT = 'var(--gt-surface-alt, #f2e8d6)'
 VAR_TEXT_MUTED = 'var(--gt-text-muted, #8c8172)'
 
 def section(seed, inner, bg=None, bgimg=None, pad='var(--gt-section-pad, clamp(3.5rem, 7vw, 5rem))', name=None):
-    # The stylebook styles .wp-section (starter-tokens.json). Only pad + background belong here.
-    style = {"paddingTop": [pad], "paddingBottom": [pad]}
+    # Full-bleed FSE section: alignfull, no width. Layout on the block itself so the
+    # inspector can edit it; nothing in the theme styles .wp-section.
+    style = {"display": ["flex"], "justifyContent": ["center"], "flexDirection": ["column"],
+             "alignItems": ["center"],
+             "paddingLeft": ["var(--wp--custom--spacing--side, min(3vw, 20px))"],
+             "paddingRight": ["var(--wp--custom--spacing--side, min(3vw, 20px))"],
+             "paddingTop": [pad], "paddingBottom": [pad],
+             "marginTop": ["0px"], "marginBottom": ["0px"], "paddingLink_Extra": "lr"}
     if bg:
         style["backgroundColor"] = [bg]
     if bgimg:
         style["backgroundImage"] = [f"url({bgimg})"]
         style["backgroundSize"] = ["cover"]
-        style["backgroundPosition"] = ["center center"]
+        style["backgroundPosition"] = ["center"]
     return block(seed, 'section', inner=inner, style=style, gclass='wp-section',
-                 html_attrs='data-type="section-component"',
-                 extra={"isVariation": "contentwrapper"}, name=name, alignfull=True)
+                 extra={"isVariation": "contentwrapper"}, name=name, alignfull=True,
+                 html_attrs='data-type="section-component"')
 
 def content(seed, inner, extra_style=None, name=None):
-    # The stylebook styles .wp-content-wrap. extra_style is for design overrides.
-    return block(seed, 'div', inner=inner, style=extra_style, name=name,
-                 gclass='wp-content-wrap', html_attrs='data-type="content-area-component"')
+    style = {"maxWidth": ["100%"],
+             "width": ["var(--wp--style--global--wide-size, 1200px)"]}
+    if extra_style:
+        style.update(extra_style)
+    return block(seed, 'div', inner=inner, style=style, gclass='wp-content-wrap',
+                 extra={"isVariation": "nocolumncontent"}, name=name or 'Content Area',
+                 html_attrs='data-type="content-area-component"')
 
 def hero_card(seed, eyebrow_cls, eyebrow, h1txt, lead, maxw='640px', align='center'):
     inner = block(seed + 'eb', 'div', text=eyebrow, gclass=eyebrow_cls, name='Eyebrow')

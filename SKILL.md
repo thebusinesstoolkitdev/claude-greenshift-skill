@@ -1,16 +1,14 @@
 ---
 name: greenlight
 description: >
-  Builds WordPress sites over the REST API, from a Paper .pen file (preferred), a Figma
-  file, screenshots or a sketch, without opening the block editor. It extracts the design, converts and uploads
-  the images, pushes a token-based stylebook, generates Gutenberg blocks, and wires up the
-  pages, the FSE header and footer, the contact form, SMTP and SEO. One set of generator
-  calls emits either native WordPress core blocks or GreenLight element blocks.
-  Use it whenever someone wants a WordPress page, section or whole site built from a
-  design, or wants Gutenberg block markup written in code rather than clicked together in
-  the editor. That includes the GreenLight builder, GreenShift, wpsoul, figma to wordpress,
-  paper to wordpress, design to wordpress, "recreate this design in wordpress", "build the
-  block markup for this section", and any scripted WordPress work over wp-json.
+  Builds WordPress sites over the REST API from Penpot, Paper, Pencil, Figma,
+  screenshots or a sketch, without opening the block editor. It extracts the design,
+  converts and uploads the images, pushes a token-based stylebook, generates native
+  GreenShift / GreenLight element blocks that stay editable in the page editor (FSE
+  alignfull sections, inspector backgrounds, no leftover width CSS), and wires up
+  the pages, header, footer, form, SMTP and SEO. Use when someone wants a WordPress
+  page or site from a design, Gutenberg block markup, GreenLight, GreenShift, wpsoul,
+  Penpot to WordPress, Paper to WordPress, Figma to WordPress, or wp-json site builds.
 ---
 
 
@@ -34,6 +32,15 @@ GreenLight/GreenShift release, and an old skill produces confidently wrong marku
 
 If the check itself cannot run (no git, offline), say that too, so the user knows the
 copy is unverified rather than assuming it is current.
+
+**Then, if a `.env` is present, check the site:** `python scripts/stylebook.py check`.
+It detects a site built by an older skill version — shell classes missing from the
+stylebook, retired `gt-section` / `gt-container` names still stored, or pages whose sections
+carry a bare `wp-section` class with no layout of their own. Those sections render
+full-width and un-centred. **Always relay the result to the user.** When it fires, offer
+the two fixes it prints: `stylebook.py push` restores layout on the existing pages
+immediately; regenerating the pages makes those sections inspector-editable. Do not build
+on the site until the user has chosen.
 
 ## Two engines, one set of calls
 
@@ -81,13 +88,18 @@ specification.
 `reference/upstream-block-spec.md` is now only a divergence register: where this skill
 departs from the spec, and why. The spec itself lives upstream and is fetched on demand.
 
-block emission. `reference/site-conventions.md` covers the decisions that are not
-GreenLight-specific, typography measure, link and title hygiene, safe updates, handover. Read it before writing
+**Before you emit a single section**, read `reference/fse-and-greenshift.md` (FSE widths,
+inspector backgrounds, variations) and `reference/design-sources.md` (Penpot / Paper /
+Pencil / Figma / screenshot → blocks). Most failed builds ignored those two files and
+copied board width onto a section.
+
+`reference/site-conventions.md` covers the decisions that are not GreenLight-specific,
+typography measure, link and title hygiene, safe updates, handover. Read it before writing
 page content; most of it is invisible until it is expensive.
 
-## Four rules that cause most failures
+## Five rules that cause most failures
 
-Rules 1-3 are GreenLight-backend specific. Rule 4 applies to both.
+Rules 1-3 are GreenLight-backend specific. Rules 4-5 apply to both.
 
 1. **CSS delivery depends on where the markup is going, and the two paths never mix.**
    Upstream splits it (`instructions/validate-styles.md`, its `SKILL.md:259`):
@@ -164,10 +176,21 @@ Rules 1-3 are GreenLight-backend specific. Rule 4 applies to both.
    the moment a token or layout class changes, and every check in this skill skips straight
    past it. The commonest version of this mistake is hand-writing a grid of cards as one
    slab of markup. `core/html` is for scripts, JSON-LD and shortcodes. Everything else is
-   `block()`, `grid()`, `heading()`, `image()`, `section()`.
+   `block()`, `grid()`, `heading()`, `image()`, `section()`, `columns()`.
+5. **Emit inspector fields, not leftover CSS. Never set width on a full-bleed section.**
+   GreenLight FSE (`useRootPaddingAwareAlignments`, constrained `post-content`) already
+   makes `alignfull` sections 100% wide. A Penpot/Figma board of 1440px is not a CSS
+   width. Heroes are `contentwrapper` + `nocolumncontent`: flex + gap + padding on the
+   section, `var(--wp--style--global--wide-size)` on the inner wrap only. Background
+   photos and ambient videos are `backgroundColor` / `backgroundImage` on the section
+   (or `background_video()` / `youtubeplay`), never a sibling `<img>` / `<video>` plus
+   custom CSS. If a developer cannot change it from the GreenShift sidebar, rebuild the
+   band. Details: `reference/fse-and-greenshift.md`.
 
-`scripts/blocks.py` enforces all four, `raw_html()` raises if it is handed content-shaped
-markup. `reference/troubleshooting.md` has the full symptom-first list.
+`scripts/blocks.py` enforces 1-4 and refuses section widths. `check_blocks.py` flags
+width on `contentwrapper` and missing wide-size on `nocolumncontent`. `raw_html()`
+raises if it is handed content-shaped markup. `reference/troubleshooting.md` has the
+symptom-first list.
 
 ## Setup
 
@@ -203,65 +226,20 @@ and backups, do not install plugins that duplicate them.
 
 ## Design sources
 
-One write path, three read adapters. The write path never changes: tokens into the
-stylebook, images into `wp/v2/media`, vanilla HTML through `scripts/convert_html.py`,
-then `WP.push_page()`. Figma, Paper and screenshots only fill an intermediate:
-section map, tokens, media list, HTML. WordPress never sees the design tool.
+One write path. Penpot, Paper/Pencil, Figma and screenshots only fill a section map.
+**Read `reference/design-sources.md` and follow that source's steps.** Do not convert
+a 1440px board into `width: 1440px` on a section.
 
-**Paper is the default source.** It is already HTML/CSS with flex layout, which is
-what `convert.js` wants. Figma REST stays as a dying adapter while files move. A
-screenshot is last resort.
-
-### Paper (.pen)
-
-Paper Desktop must be open; the MCP is `http://127.0.0.1:29979/mcp`. Never read
-`.pen` files from disk. If the MCP is missing, stop and say so; do not guess the
-tree from a screenshot of the canvas.
-
-Extract in this order, then get the section map approved before generating:
-
-1. `get_basic_info` — artboards are pages or breakpoints. Name them.
-2. `get_tree_summary` — draft the section map (hero, features, CTA…).
-3. `get_computed_styles` + `get_node_info` — copy, type, fonts, colours, spacing.
-4. `get_jsx` **inline-styles format**, never Tailwind. Paper's own "build a website"
-   guide emits React + Tailwind; GreenLight forbids both. Rewrite that dump to
-   vanilla HTML with prefixed classes before `convert.js` runs.
-5. `export` / `get_fill_image` — photos and icons through `prep_images.py`. Do not
-   rebuild a section from one giant PNG.
-6. `get_screenshot` — visual reference, then QA against the live page.
-
-**Paper file conventions** (garbage in still garbage out):
-
-- Flex / stacked frames, not absolute soup.
-- One artboard per page; extra artboards named for breakpoints if they exist.
-- Top-level frames named as sections (`hero`, `features`, `cta`).
-- Colour and type live in Paper tokens, not one-off hex on leaves.
-- Real text in the file. No Lorem that has to be invented later.
-
-Rewrite Paper output to the HTML `convert.js` will keep: unique prefixed classes
-(minimum four letters), styles in `<style data-wp-block-html="css">` on a classed
-parent, no `:root`, no `* {}`, no Tailwind, no React. Use the `wp-section` /
-`wp-content-wrap` **markup** for full-bleed bands; do **not** paste the
-`.wp-section` CSS into the page stylesheet; the stylebook already carries it site-wide.
-
-Paper tokens map to native stylebook keys (`variables`, `colours`, `global_classes`)
-via GET-merge-write. Do not send `figma_*` keys; stock 3.3.7 merges them badly.
-
-### Figma (adapter only)
-
-REST, no MCP. `GET /v1/files/{key}?depth=2` for the frame list,
-`/v1/files/{key}/nodes?ids=…` for trees, `/v1/images/{key}?ids=…&format=png&scale=2`
-for assets. Header `X-Figma-Token`. Dump into the same section map / tokens / HTML
-intermediate as Paper. During the switch, Paper's `get_guide` (figma-import) can
-move a file into Paper first; that is better than keeping two extractors forever.
-
-### Screenshots / sketches
-
-Read the image, infer the structure, and confirm the section map before building.
-Use this only when Paper and Figma are unavailable.
+- **Penpot** (preferred when the file is open in Penpot). MCP `user-penpot`: overview,
+  walk top-level frames as sections, export **content** rasters only. Frame fills become
+  `backgroundImage` on the section, not exported PNGs of the whole band.
+- **Paper / Pencil**. Paper Desktop MCP. `get_jsx` inline-styles only, never Tailwind.
+  Never read `.pen` from disk.
+- **Figma**. REST API, `X-Figma-Token`. Same intermediate as Paper.
+- **Screenshots / sketches**. Last resort. Confirm the section map before generating.
 
 Always produce a **section map** (hero, features, CTA…) and get it approved before
-generating. It is the cheapest place to catch a misread.
+generating. Classify every image as section background, content, or icon.
 
 ## Layout gotcha: core's flow margin
 
@@ -478,26 +456,33 @@ stays enforced after handover rather than only at build time.
 
 ## The documented section shell
 
-A full-width section with centred content has a prescribed structure. `section()` and
-`container()` emit it:
+A full-bleed band is an FSE `alignfull` GreenShift **Section** (`contentwrapper`) wrapping
+a **Content area** (`nocolumncontent`). `section()` and `container()` emit it.
+`columns()` emits `contentcolumns` + `contentarea` for splits.
 
 ```html
-<section class="wp-section alignfull" data-type="section-component">
-  <div class="wp-content-wrap" data-type="content-area-component">…</div>
+<section class="gsbp-xxxxxxx wp-section alignfull" data-type="section-component">
+  <div class="gsbp-yyyyyyy wp-content-wrap" data-type="content-area-component">…</div>
 </section>
 ```
 
-Keep the `alignfull` class. The two classes are styled **once, by the stylebook**
-(`reference/starter-tokens.json` → `stylebook.py push`), reading the theme's own tokens:
-`var(--wp--style--global--wide-size, 1200px)` for the inner width and
-`var(--wp--custom--spacing--side, min(3vw, 20px))` for side padding. (Upstream writes
-`--wp--spacing--side`; the theme never defines that one, so its fallback always fired.
-The `--wp--custom--` form is the token `theme.json` actually emits.) Nothing in the theme
-or the plugin styles these classes on the front end. **Do not copy the shell CSS into a
-page** — one site-wide rule, not one per page. Padding top and bottom, plus optional
-background, are yours per section; the flex column, side pad, zero margin and wide-size
-width are the stylebook's. Inventing your own section class instead is what produces
-inter-section seams and a width that disagrees with the theme.
+**Section (inspector Layout + Spacing + Background), on the block itself:** flex column,
+justify/align as the design, row gap, vertical padding, side padding via
+`var(--wp--custom--spacing--side, min(3vw, 20px))`, `marginTop`/`marginBottom` `0px`,
+background. **No width.** `section()` refuses `width`/`maxWidth`/`minWidth`; FSE
+`alignfull` already spans. **Inner wrap only:** `width: var(--wp--style--global--wide-size, 1200px)`,
+`max-width: 100%`. That is what inserting **Section** in the plugin's editor produces, so
+every band stays editable in the block inspector and a page renders without a stylebook push.
+
+Nothing in the theme or the plugin styles `.wp-section` / `.wp-content-wrap` on the front
+end (Greenlight 2.1 and gl-page-builder 3.3.7 both checked; the only occurrence is the prompt
+text inside the editor bundle). Do not paste upstream's sample `.wp-section{…}` CSS into a
+page; do not strip the block's own layout as a "theme duplicate" — an earlier version of
+this skill did and produced full-width, un-centred sections. The same two rules also ship
+as stylebook classes (`reference/starter-tokens.json`) for two narrower jobs: the core
+backend, which cannot carry per-block layout, and retrofitting pages built by that earlier
+version. Upstream writes `--wp--spacing--side`; the theme never defines it, so its fallback
+always fired. Full mapping: `reference/fse-and-greenshift.md`.
 
 ## Where a page's CSS lives
 
@@ -532,8 +517,10 @@ compiled CSS, falling back to the page `meta` field if `css_settings` is blocked
 ## Generating pages
 
 Use `scripts/blocks.py`, `block()`, `image()`, `svg_icon()`, `section()`, `container()`,
-`grid()`, `button()`, `heading()`, `eyebrow()`, `style_manager()`, `raw_html()`,
-`shortcode()`. See `examples/` for two complete generators.
+`columns()`, `background_video()`, `grid()`, `button()`, `heading()`, `eyebrow()`,
+`style_manager()`, `raw_html()`, `shortcode()`. See `examples/` for two complete
+generators. Prefer these helpers over `convert.js` when the source is a design file:
+the converter copies board widths into sections.
 
 **One finished HTML file in hand? Use upstream's converter instead.** Hand-emitting from
 Python suits many pages built from structured data. For a single design that already
@@ -828,14 +815,15 @@ while testing and purge before a handover.
 ## Order of operations
 
 1. `.env`, auth check, confirm what the host already provides
-2. Extract the design → section map → approval
+2. Extract the design (`reference/design-sources.md`) → section map → approval
 3. Contrast gate the palette → push the stylebook (`--theme` registers the tokens as theme
    presets and aliases the stylebook onto them)
-4. Images: export → `prep_images.py build` (WebP) → `upload`, logo + alt text
-5. Generate and push pages as drafts
+4. Images: export **content** assets only → `prep_images.py build` (WebP) → `upload`;
+   section fills stay URLs on `backgroundImage`, not extra image blocks
+5. Generate pages with `section()` / `container()` / `columns()` as drafts (`no-title`)
 6. Header: discover with `area='header'`, patch surgically if it carries GreenLight
    blocks, otherwise rewrite; footer rewrite
-7. `check_blocks.py` on the output, then push; `verify.py --all` and
-   `check_links.py` on the live pages, then the browser at 375px
+7. `check_blocks.py` on the output (must be clean of section widths), then push;
+   `verify.py --all` and `check_links.py` on the live pages, then the browser at 375px
 8. Launch stack: plugins, form, emails, SEO, llms.txt
 9. Work `reference/launch-checklist.md` and hand over the manual steps

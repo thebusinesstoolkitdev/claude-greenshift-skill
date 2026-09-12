@@ -69,33 +69,14 @@ CSSRENDER = '1'
 # against a newer plugin shows different values, change them here only.
 BREAKPOINTS = (None, '991.98px', '767.98px', '575.98px')
 
-# The stylebook prints these on .wp-section / .wp-content-wrap once, site-wide
-# (reference/starter-tokens.json); nothing in the theme or plugin does.
-# Re-emitting them as styleAttributes compiles to a .gsbp-xxx rule that
-# duplicates that stylebook rule. That is the usual source of "unnecessary CSS" on a
-# Figma-to-blocks build: the design CSS, plus a second copy of the shell.
-# None means "any value that is clearly the theme's own" (its custom property
-# or the documented fallback).
-THEME_SHELL = {
-    'wp-section': {
-        'display': ('flex',),
-        'justify-content': ('center',),
-        'flex-direction': ('column',),
-        'align-items': ('center',),
-        'padding-left': None,
-        'padding-right': None,
-        'margin-top': ('0', '0px'),
-        'margin-bottom': ('0', '0px'),
-        'position': ('relative',),
-    },
-    'wp-content-wrap': {
-        'max-width': ('100%',),
-        'width': None,
-        'display': ('flex',),
-        'flex-direction': ('column',),
-        'align-items': ('center',),
-    },
-}
+# Empty on purpose. This once listed the .wp-section / .wp-content-wrap
+# declarations to strip from blocks as "theme duplicates". Nothing on the front
+# end styles those classes (Greenlight 2.1 and gl-page-builder 3.3.7 both
+# checked), so stripping removed the only copy and sections rendered full-width
+# and un-centred. Layout now travels on the block, the way the editor's own
+# Section variation inserts it. Kept as a name so is_theme_shell_decl() and its
+# callers stay importable; they are inert.
+THEME_SHELL = {}
 
 _THEME_SIDE_PAD = re.compile(
     r'var\(\s*--wp--spacing--side|min\(\s*3vw\s*,\s*20px\s*\)', re.I)
@@ -110,7 +91,7 @@ def kebab_prop(name):
 
 
 def is_theme_shell_decl(classes, prop, value):
-    """True when this declaration is already provided by the stylebook shell rule for `classes`."""
+    """Always False since THEME_SHELL was emptied; see the note there."""
     value = (value or '').strip()
     if not value:
         return False
@@ -135,12 +116,12 @@ def is_theme_shell_decl(classes, prop, value):
 
 
 def slim_stylesheet(css):
-    """Drop theme-owned declarations from .wp-section / .wp-content-wrap rules.
+    """Inert since THEME_SHELL was emptied; returns the CSS unchanged.
 
-    Agents following upstream's "use next styles for sections" paste the theme
-    shell into every page <style>. Those rules then ride in a stylemanager and
-    compile_css() ships a second copy. A rule that is only theme defaults is
-    removed; a rule that also sets a real design value keeps the extras.
+    A pasted `.wp-section{...}` rule in page CSS is still the wrong place for
+    layout (it belongs on the section block, where the inspector can edit it),
+    but silently deleting it removed the only copy on sites where the block
+    carried none. check_blocks reports; nothing strips.
     """
     if not css:
         return css
@@ -336,21 +317,16 @@ def compile_css(markup):
             if prop == 'customCSS_Extra':
                 extra.append(slim_stylesheet(str(value).replace('{CURRENT}', '.' + bid)))
                 continue
+            # Plugin inspector flags (flexColumns_Extra, imageGradient_Extra, …)
+            # are not CSS. Dict values are layout descriptors, not declarations.
+            if prop.endswith('_Extra') or isinstance(value, dict):
+                continue
             values = value if isinstance(value, list) else [value]
             kebab = kebab_prop(prop)
-            # A shell default is redundant only while this block has emitted
-            # nothing of its own for the property. Once it has, its .gsbp rule
-            # beats the theme at every width, so a later entry matching the
-            # theme is the breakpoint reset that undoes it: drop that and the
-            # wider value cascades down over the reset the design asked for.
-            emitted = False
             for i, v in enumerate(values[:len(BREAKPOINTS)]):
                 if v in (None, ''):
                     continue
-                if not emitted and is_theme_shell_decl(classes, kebab, v):
-                    continue
                 per_bp[i].append('%s:%s' % (kebab, v))
-                emitted = True
         for i, decls in enumerate(per_bp):
             if not decls:
                 continue
@@ -725,46 +701,110 @@ def gravity_form(form_id, title=False, description=False, ajax=True):
 # Layout helpers, these assume the stylebook classes from reference/starter-tokens.json
 # --------------------------------------------------------------------------
 
-def section(seed, inner, bg=None, bg_image=None, pad='var(--gt-section-pad, clamp(3rem, 7vw, 5rem))',
-            tag='section', name=None, prefix=''):
-    """Full-bleed section wrapper with fluid vertical padding.
+# FSE already stretches alignfull sections. These on a contentwrapper are noise
+# and hide the real measure (the inner nocolumncontent / wide-size wrap).
+_SECTION_WIDTH_KEYS = ('width', 'maxWidth', 'minWidth', 'inlineSize', 'maxInlineSize')
 
-    On the core backend the layout comes from the `wp-section` stylebook class
-    rather than inline CSS, because core blocks cannot carry arbitrary properties.
-    The class ships in reference/starter-tokens.json and holds the same rules.
+
+def _refuse_section_width(style, seed):
+    style = dict(style or {})
+    for key in _SECTION_WIDTH_KEYS:
+        if key not in style:
+            continue
+        values = style[key] if isinstance(style[key], list) else [style[key]]
+        raise ValueError(
+            'section %r sets %s=%r. GreenLight FSE already makes alignfull '
+            'sections 100%% wide (useRootPaddingAwareAlignments). Width belongs '
+            'on the inner nocolumncontent wrap as '
+            'var(--wp--style--global--wide-size, 1200px), never on the section. '
+            'See reference/fse-and-greenshift.md.' % (seed, key, values))
+    return style
+
+
+def section(seed, inner, bg=None, bg_image=None, overlay=None,
+            pad='var(--wp--preset--spacing--70, 3.38rem)',
+            tag='section', name=None, prefix='', align_items='center',
+            justify='center', gap=None, style=None,
+            variation='contentwrapper'):
+    """Full-bleed FSE section. Width is alignment, not CSS.
+
+    GreenShift inspector mapping: Layout (flex + gap), Spacing (pad), Background
+    (colour / image / overlay gradient). Do not put a decorative <img> or <video>
+    in the flow to fake a background; use bg_image / background_video().
     """
     if BACKEND == 'core':
-        style = {'paddingTop': [pad], 'paddingBottom': [pad]}
+        core_style = {'paddingTop': [pad], 'paddingBottom': [pad]}
         if bg:
-            style['backgroundColor'] = [bg]
-        if bg_image:                      # no inline background-image on core blocks
+            core_style['backgroundColor'] = [bg]
+        if bg_image:
             raise ValueError(
                 'a background image on block %r needs a stylebook class on the core '
                 'backend. Core blocks carry no background-image property. Add one '
                 'with the url baked in, or stay on the greenshift backend.' % seed)
-        return block(seed, tag, inner=inner, style=style, classes='wp-section',
+        return block(seed, tag, inner=inner, style=core_style, classes='wp-section',
                      name=name, alignfull=True, prefix=prefix)
 
-    # The STYLEBOOK styles `.wp-section` (flex column, side pad from the theme's
-    # --wp--custom--spacing--side, zero margin) -- see reference/starter-tokens.json.
-    # Nothing in the theme or the plugin styles this class; upstream's "use next
-    # styles for sections" means the author supplies the rule, and a site-wide
-    # rule belongs in the stylebook. Only vertical padding and optional
-    # background belong per block. Copying the shell here compiled a second copy
-    # onto every section via `_gspb_post_css`.
-    style = {
+    side = 'var(--wp--custom--spacing--side, var(--wp--spacing--side, min(3vw, 20px)))'
+    out = {
+        'display': ['flex'], 'justifyContent': [justify], 'flexDirection': ['column'],
+        'alignItems': [align_items],
+        'paddingLeft': [side], 'paddingRight': [side],
         'paddingTop': [pad], 'paddingBottom': [pad],
+        'marginTop': ['0px'], 'marginBottom': ['0px'],
+        'paddingLink_Extra': 'lr',
     }
+    if gap:
+        out['rowGap'] = [gap]
     if bg:
-        style['backgroundColor'] = [bg]
-    if bg_image:
-        style['backgroundImage'] = [f'url({bg_image})']
-        style['backgroundSize'] = ['cover']
-        style['backgroundPosition'] = ['center center']
-    return block(seed, tag, inner=inner, style=style, classes='wp-section',
+        out['backgroundColor'] = [bg]
+    if bg_image and overlay:
+        out['imageGradient_Extra'] = True
+        out['backgroundImage'] = [
+            '%s, url(%s)' % (overlay, bg_image)]
+        out['backgroundSize'] = ['cover']
+        out['backgroundPosition'] = ['center']
+    elif bg_image:
+        out['backgroundImage'] = ['url(%s)' % bg_image]
+        out['backgroundSize'] = ['cover']
+        out['backgroundPosition'] = ['center']
+    elif overlay:
+        out['imageGradient_Extra'] = True
+        out['backgroundImage'] = [overlay]
+    if style:
+        out.update(style)
+    out = _refuse_section_width(out, seed)
+    extra = {'isVariation': variation}
+    return block(seed, tag, inner=inner, style=out, classes='wp-section',
                  attrs={'data-type': 'section-component'},
-                 extra={'isVariation': 'contentwrapper'}, name=name,
-                 alignfull=True, prefix=prefix)
+                 extra=extra, name=name, alignfull=True, prefix=prefix)
+
+
+def background_video(seed, src, poster=None, prefix='', name='Background video'):
+    """Ambient video layer for a section. Not a player.
+
+    Parent section must be position:relative; pass
+    style={'position':['relative'], 'overflow':['hidden']} into section().
+    Content siblings need zIndex >= 1.
+    """
+    if BACKEND == 'core':
+        raise ValueError(
+            'background_video(%r) has no core-block equivalent; stay on GreenLight '
+            'or use a stylebook background.' % seed)
+    extra = {
+        'src': src, 'loop': True, 'autoplay': True, 'muted': True,
+        'playsinline': True, 'isVariation': 'video',
+    }
+    attrs = {'src': src, 'loop': '', 'autoplay': '', 'muted': '', 'playsinline': ''}
+    if poster:
+        extra['poster'] = poster
+        attrs['poster'] = poster
+    return block(
+        seed, 'video', extra=extra, attrs=attrs, name=name, prefix=prefix,
+        style={
+            'position': ['absolute'], 'inset': ['0px'],
+            'height': ['100%'], 'objectFit': ['cover'],
+            'zIndex': ['0'], 'pointerEvents': ['none'],
+        })
 
 
 def local_classes(classes):
@@ -1158,31 +1198,79 @@ def has_greenshift_blocks(markup):
     return 'wp:greenshift-blocks/' in (markup or '')
 
 
-def container(seed, inner, width=None, name=None, prefix=''):
-    """Centered content column inside a section.
+def container(seed, inner, width='1200px', name='Content Area', prefix='',
+              stack=None, gap=None, align_items=None):
+    """Inner wide-size wrap. This is the only place a section's width belongs.
 
-    The stylebook styles `.wp-content-wrap` (max-width 100%, width from the
-    theme's `--wp--style--global--wide-size`) -- see reference/starter-tokens.json.
-    Nothing in the theme or plugin styles the class itself. Pass `width` only to
-    override the theme value; do not re-emit the shell.
+    The width is the theme's: var(--wp--style--global--wide-size, <fallback>).
+    The same rule ships as the `wp-content-wrap` stylebook class for the core
+    backend, and to retrofit pages built by earlier skill versions that emitted
+    the bare class with no layout of their own.
+
+    `stack=True` makes a vertical flex stack (typical hero copy). Leave it off
+    when the child is already columns() or a grid.
     """
     if BACKEND == 'core':
-        # same stylebook shell class as the greenshift backend; core's
-        # constrained layout handles centring
         return block(seed, 'div', inner=inner, name=name, prefix=prefix,
                      classes='wp-content-wrap')
-    style = None
-    if width:
-        # literal override, not the theme variable: wrapping it in
-        # var(--wp--style--global--wide-size, ...) would be a no-op on a live
-        # theme (the variable is defined) and compile_css() would then drop it
-        # as a theme-shell duplicate.
-        style = {'width': [width]}
+    style = {
+        'maxWidth': ['100%'],
+        'width': ['var(--wp--style--global--wide-size, %s)' % width],
+    }
+    if stack:
+        style['display'] = ['flex']
+        style['flexDirection'] = ['column']
+        style['alignItems'] = [align_items or 'center']
+        if gap:
+            style['rowGap'] = [gap]
+    elif align_items:
+        style['alignItems'] = [align_items]
     return block(seed, 'div', inner=inner, name=name, prefix=prefix,
                  classes='wp-content-wrap',
                  attrs={'data-type': 'content-area-component'},
                  extra={'isVariation': 'nocolumncontent'},
                  style=style)
+
+
+def columns(seed, cells, widths=None, gap='var(--wp--preset--spacing--50, 1.5rem)',
+            pad='var(--wp--preset--spacing--70, 3.38rem)', bg=None, bg_image=None,
+            name=None, prefix=''):
+    """Full-bleed section whose inner wrap is the plugin column layout.
+
+    cells: iterable of inner markup strings. widths: desktop percentages, default
+    equal split. Mobile always stacks to 100.
+    """
+    cells = list(cells)
+    n = len(cells)
+    if n < 2:
+        raise ValueError('columns(%r) needs at least two cells' % seed)
+    widths = list(widths) if widths is not None else [int(100 / n)] * n
+    if len(widths) != n:
+        raise ValueError('columns(%r): %d cells vs %d widths' % (seed, n, len(widths)))
+    desktop_name = '/'.join(str(w) for w in widths)
+    mobile_name = '/'.join(['100'] * n)
+    col_blocks = ''.join(
+        block('%s-col-%d' % (seed, i), 'div', inner=cell, prefix=prefix,
+              name='Column %d' % (i + 1))
+        for i, cell in enumerate(cells))
+    area = block(
+        seed + '-area', 'div', inner=col_blocks, name='Content Area', prefix=prefix,
+        attrs={'data-type': 'content-area-component'},
+        extra={'isVariation': 'contentarea'},
+        style={
+            'maxWidth': ['100%'],
+            'width': ['var(--wp--style--global--wide-size, 1200px)'],
+            'display': ['flex'], 'flexDirection': ['row'], 'flexWrap': ['wrap'],
+            'columnGap': [gap], 'rowGap': [gap],
+            'flexColumns_Extra': n,
+            'flexWidths_Extra': {
+                'desktop': {'name': desktop_name, 'widths': widths},
+                'tablet': {'name': desktop_name, 'widths': widths},
+                'mobile': {'name': mobile_name, 'widths': [100] * n},
+            },
+        })
+    return section(seed, area, bg=bg, bg_image=bg_image, pad=pad, name=name,
+                   prefix=prefix, variation='contentcolumns')
 
 
 def grid(seed, inner, variant='gt-grid-4', style=None, name=None, prefix=''):

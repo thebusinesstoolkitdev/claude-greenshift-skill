@@ -205,7 +205,9 @@ foot_top = block('fttop', 'div', inner=
     block('ftwrap', 'div', inner=
         block('ftgrid', 'div', inner=brand_col + explore_col + visit_col,
               gclass='gt-footer-grid', name='Footer Grid'),
-        gclass='wp-content-wrap', name='Footer Wrap'),
+        gclass='wp-content-wrap',
+        style={"maxWidth": ["100%"], "width": ["var(--wp--style--global--wide-size, 1200px)"]},
+        name='Footer Wrap'),
     style={"display": ["flex"], "justifyContent": ["center"], "paddingTop": ["3.5rem"], "paddingBottom": ["3rem"],
            "paddingLeft": ["min(3vw, 20px)"], "paddingRight": ["min(3vw, 20px)"], "backgroundColor": ["var(--gt-surface, #fbf6ec)"],
            "borderTop": ["1px solid rgba(124,139,84,0.15)"], "marginBlockStart": ["0px"]},
@@ -216,7 +218,8 @@ foot_bottom = block('ftbot', 'div', inner=
         block('ftcopy', 'div', text='© 2026 Marigold & Fern', style={"fontSize": ["13px"], "color": [VAR_TEXT_MUTED]}) +
         block('ftmade', 'div', text='Made with care in Ashford', style={"fontSize": ["13px"], "color": [VAR_TEXT_MUTED]}),
         gclass='wp-content-wrap',
-        style={"display": ["flex"], "justifyContent": ["space-between"],
+        style={"maxWidth": ["100%"], "width": ["var(--wp--style--global--wide-size, 1200px)"],
+               "display": ["flex"], "justifyContent": ["space-between"],
                "flexWrap": ["wrap"], "rowGap": ["0.5rem"], "columnGap": ["1rem"]}, name='Bottom Row'),
     style={"display": ["flex"], "justifyContent": ["center"], "paddingTop": ["1.4rem"], "paddingBottom": ["1.4rem"],
            "paddingLeft": ["min(3vw, 20px)"], "paddingRight": ["min(3vw, 20px)"], "backgroundColor": ["var(--gt-surface, #fbf6ec)"],

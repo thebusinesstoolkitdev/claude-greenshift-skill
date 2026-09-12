@@ -363,7 +363,12 @@ def push(path, theme=False):
         # existing entries are normalised too, so a screen broken by an older
         # push is repaired by the next one
         existing = [class_entry(c) for c in current.get('global_classes') or []]
-        payload['global_classes'] = _merge_by(existing, classes, 'value')
+        merged = _merge_by(existing, classes, 'value')
+        # gt-section / gt-container were the shell under earlier skill versions.
+        # The rules now ship as wp-section / wp-content-wrap; leaving both means
+        # two sources of truth for the same width.
+        merged = [c for c in merged if c.get('value') not in RETIRED_CLASSES]
+        payload['global_classes'] = merged
     if isinstance(spec.get('elements'), dict):
         payload['elements'] = spec['elements']   # the screen's own keyed shape, passed through
     if spec.get('colours'):
@@ -378,6 +383,81 @@ def push(path, theme=False):
         print('theme presets registered: %d, gt- variables aliased onto them' % len(aliases))
         if replaced:
             print('theme palette slots replaced: %s' % ', '.join('%s=%s' % kv for kv in sorted(replaced.items())))
+
+
+RETIRED_CLASSES = ('gt-section', 'gt-container')
+SHELL_CLASSES = ('wp-section', 'wp-content-wrap')
+_BARE_SECTION = re.compile(
+    r'<!-- wp:greenshift-blocks/element (\{[^\n]*?"isVariation":"contentwrapper"[^\n]*?\}) -->')
+
+
+def check():
+    """Detect a site whose stylebook or pages were built by an older skill.
+
+    Two signals, both cheap:
+      * stylebook: shell classes missing, or the retired gt-section / gt-container
+        names still present
+      * pages: sections emitted with the bare `wp-section` class and no layout in
+        their own styleAttributes (the Sept 2026 hygiene refactor did that; those
+        sections render full-width and un-centred unless the stylebook shell rules
+        exist)
+
+    Exit 1 when either signal fires, so the agent stops and tells the user.
+    Network or auth failure exits 0 with a note: never block a build on a probe.
+    """
+    try:
+        wp = WP()
+        settings = wp.gs_settings()
+    except SystemExit:
+        raise
+    except Exception as exc:
+        print('stylebook check skipped (%s): could not read the site.' % exc.__class__.__name__)
+        return 0
+
+    names = {c.get('value') for c in (settings.get('global_classes') or [])}
+    missing = [c for c in SHELL_CLASSES if c not in names]
+    retired = [c for c in RETIRED_CLASSES if c in names]
+
+    bare = 0
+    pages_scanned = 0
+    try:
+        pages = wp.get('wp/v2/pages?per_page=100&status=publish,draft,private&context=edit')
+        for page in pages:
+            raw = (page.get('content') or {}).get('raw') or ''
+            pages_scanned += 1
+            for m in _BARE_SECTION.finditer(raw):
+                attrs = m.group(1)
+                if '"styleAttributes"' not in attrs or '"display"' not in attrs:
+                    bare += 1
+    except Exception as exc:
+        print('  (page scan skipped: %s)' % exc.__class__.__name__)
+
+    if not missing and not retired and not bare:
+        print('stylebook check: shell classes present, no retired names, '
+              '%d page(s) scanned, no bare sections. This site is current.' % pages_scanned)
+        return 0
+
+    print('=' * 72)
+    print('THIS SITE WAS BUILT WITH AN OLDER VERSION OF THE SKILL')
+    if missing:
+        print('  stylebook is missing the shell classes: %s' % ', '.join(missing))
+    if retired:
+        print('  stylebook still carries retired classes: %s' % ', '.join(retired))
+    if bare:
+        print('  %d section(s) across %d page(s) emit a bare wp-section with no layout '
+              'of their own; they render full-width and un-centred without the shell rules'
+              % (bare, pages_scanned))
+    print()
+    print('Tell the user, then offer the fix. Two levels:')
+    print('  1. Restore layout on the existing pages now (no regeneration):')
+    print('       python scripts/stylebook.py push reference/starter-tokens.json')
+    print('     This installs the shell rules site-wide and retires the old class names.')
+    if bare:
+        print('  2. Make those sections inspector-editable: regenerate the pages with the')
+        print('     current section()/container(), which put layout on the block itself.')
+    print('Then: python scripts/stylebook.py verify')
+    print('=' * 72)
+    return 1
 
 
 def push_core(path, theme=False):
@@ -553,5 +633,7 @@ if __name__ == '__main__':
         remove(spec_path)
     elif command == 'verify':
         verify()
+    elif command == 'check':
+        sys.exit(check())
     else:
         dump()

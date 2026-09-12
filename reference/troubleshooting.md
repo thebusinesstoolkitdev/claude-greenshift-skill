@@ -15,13 +15,32 @@ the theme's wide width. Padding and backgrounds are right; layout is not.
 
 **Cause** -- `.wp-section` and `.wp-content-wrap` are naming conventions, not styled
 classes. Nothing in the Greenlight theme or gl-page-builder styles them on the front end
-(the only occurrence in either is the prompt text in the editor bundle). Upstream expects
-the author to supply the rules. This skill supplies them once, site-wide, from the
-stylebook, so if the stylebook has not been pushed to this site the shell has no CSS.
+(the only occurrence in either is the prompt text in the editor bundle). A skill version
+from September 2026 emitted the bare classes and stripped the block's own layout as a
+"theme duplicate", so those pages carry no layout at all.
 
-**Fix** -- `python scripts/stylebook.py push reference/starter-tokens.json`, then
-`python scripts/stylebook.py verify` and confirm `wp-section` and `wp-content-wrap` are
-listed as present. Do not paste the shell CSS into a page; it belongs in the stylebook.
+**Fix** -- `python scripts/stylebook.py check` names the affected pages. Then either
+`python scripts/stylebook.py push reference/starter-tokens.json` (installs the shell rules
+site-wide; layout returns immediately, no regeneration) or regenerate the pages with the
+current `section()` / `container()`, which put layout on the block so the inspector can
+edit it. Do not paste the shell CSS into a page.
+
+## A section has width:100% / 1440px / 100vw and the developer cannot edit layout
+
+**Symptom**. The page looks full-bleed, but the block inspector shows a Width field, or
+the CSS panel is full of rules the design never needed. Changing the theme's wide size
+does nothing to inner content because the section itself was given a pixel width.
+
+**Cause**. The agent copied the Penpot/Figma/Paper board size, or upstream's sample
+`.wp-section{…}` CSS, onto an FSE `alignfull` section. GreenLight 2.1 already stretches
+those via `useRootPaddingAwareAlignments`. `assets/style.css` does not even define
+`.wp-section`.
+
+**Fix**. Remove `width` / `maxWidth` / `minWidth` from the section (`contentwrapper`).
+Put `width: var(--wp--style--global--wide-size, 1200px)` only on the inner
+`nocolumncontent` wrap. Backgrounds go on the section's `backgroundImage` /
+`backgroundColor`, not on a child `<img>`. `section()` refuses the width keys;
+`check_blocks.py` flags them. See `reference/fse-and-greenshift.md`.
 
 ## Blocks render with no styling at all
 
